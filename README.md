@@ -19,7 +19,7 @@ Will be updated later
     * (in the most recent version) is designed to be similar to pytorch
     * selector is the most basic unit which apply selection (x -> smaller x). This is very similar to nn.Module
     * processor is stacked of selectors then followed by histograms filling
-    * histograms filling code is
+    * histograms filling code still need some clean up
   * analysis:
     * compute statistics from histograms
     * visulization: reduce to lower dimensional histograms for human-interpretability
