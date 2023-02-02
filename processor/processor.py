@@ -137,14 +137,14 @@ class OHProcessor(processor.ProcessorABC):
         if self.lumimask:
             events = events[self.lumimask(events.run, events.luminosityBlock)]
             cutflow["lumimask"] += len(events)
-        #lumi_list = list(set(zip(events.run, events.luminosityBlock))) # save processed lumi list
-        lumi_list = LumiAccumulator(events.run, events.luminosityBlock) # save processed lumi list
-        #lumi_list = processor.accumulator.list_accumulator(zip(events.run, events.luminosityBlock))
+        # save processed lumi list
+        #lumi_list = list(set(zip(events.run, events.luminosityBlock))) 
+        lumi_list = LumiAccumulator(events.run, events.luminosityBlock, auto_unique=True)
         
         # events-level selections
         # good event cuts
         events = self.min_npvgood(events)
-        cutflow["NPV >= {}".format(self.min_npvgood.min_NPVGood)] += len(events)
+        cutflow["NPV > {}".format(self.min_npvgood.min_NPVGood)] += len(events)
         events = self.max_pv_z(events)
         cutflow["PV |Z| < {} cm".format(self.max_pv_z.max_PV_z)] += len(events)
         events = self.max_pv_rxy(events)
@@ -417,25 +417,35 @@ class OHProcessor(processor.ProcessorABC):
         if self.lumi_csv_path:
             lumidata = LumiData(self.lumi_csv_path)
             for dataset in accumulator["processed_lumi"]:
-                if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
-                    if self.verbose > 0:
-                        warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
-                # apply unique
-                lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
-                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
-                accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
-                # compute integrated luminosity
-                accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(lumi_list)
+                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+                accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(accumulator["processed_lumi"][dataset]["lumi_list"])
         else:
             for dataset in accumulator["processed_lumi"]:
-                if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
-                    if self.verbose > 0:
-                        warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
-                # apply unique
-                lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
-                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
-                accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
-
+                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
                 accumulator["processed_lumi"][dataset]["lumi"] = None
+            
+#         if self.lumi_csv_path:
+#             lumidata = LumiData(self.lumi_csv_path)
+#             for dataset in accumulator["processed_lumi"]:
+#                 if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
+#                     if self.verbose > 0:
+#                         warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
+#                 # apply unique
+#                 lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
+#                 lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
+#                 accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
+#                 # compute integrated luminosity
+#                 accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(lumi_list)
+#         else:
+#             for dataset in accumulator["processed_lumi"]:
+#                 if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
+#                     if self.verbose > 0:
+#                         warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
+#                 # apply unique
+#                 lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
+#                 lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
+#                 accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
+
+#                 accumulator["processed_lumi"][dataset]["lumi"] = None
                 
         return accumulator
