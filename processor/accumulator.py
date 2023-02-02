@@ -21,5 +21,6 @@ class LumiAccumulator(LumiList): # extention of coffea lumi list
         super().__iadd__(other)
         if self.auto_unique:
             self.unique()
+        return self
             
     __radd__ = __iadd__
