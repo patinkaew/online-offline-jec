@@ -27,3 +27,17 @@ class JMENanoAODSchema(NanoAODSchema):
         "FatJetForJEC_genJetIdx": "GenJetAK8ForJEC",
         "FatJetCHS_genJetIdx": "GenJetAK8ForJEC",
     }
+
+class ScoutingJMENanoAODSchema(JMENanoAODSchema):
+    
+    mixins = {
+        **JMENanoAODSchema.mixins,
+        "ScoutingJet": "Jet",
+        "ScoutingFatJet": "FatJet",
+        "ScoutingRho": "Rho"
+    }
+    all_cross_references = {
+        **JMENanoAODSchema.all_cross_references,
+        "ScoutingJet_genJetIdx": "GenJet",
+        "ScoutingFatJet_genJetAK8Idx": "GenJetAK8ForJEC",
+    }
