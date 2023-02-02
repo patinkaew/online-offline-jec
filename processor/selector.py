@@ -3,12 +3,13 @@ import numpy as np
 import awkward as ak
 from abc import abstractmethod
 
-from coffea.lookup_tools import extractor
 from coffea.lumi_tools import LumiMask, LumiData, LumiList
+from coffea.lookup_tools import extractor
 from coffea.jetmet_tools import JECStack, CorrectedJetsFactory
 from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
 import correctionlib
 
+import string
 import warnings
 
 ### event-level ###
@@ -234,7 +235,7 @@ class TagAndProbeABC(SelectorABC):
         return True
         
     def apply_tag_and_probe(self, tag, probe, others=None):
-        assert len(tag) == len(probe), "length of tag and probe must be the same"
+        assert len(tag) == len(probe), "length of tag and probe must equal, but get tag: {} and probe:{}".format(len(tag), len(probe))
         if len(tag) == 0:
             return tag, probe
         
@@ -364,21 +365,24 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
             jets["pt_raw"] = (1 - jets["rawFactor"]) * jets["pt"]
             jets["mass_raw"] = (1 - jets["rawFactor"]) * jets["mass"]
         else:
+            if self.verbose > 0:
+                warnings.warn("No rawFactor, treat as raw!")
             jets["pt_raw"] = jets["pt"]
             jets["mass_raw"] = jets["mass"]
+
         
         # pt, eta, area, and rho are needed for JEC
         jets['rho'] = ak.broadcast_arrays(events.Rho.fixedGridRhoFastjetAll, jets.pt)[0]
         if "area" not in jets.fields: # placeholder for jet area
             jets["area"] = -np.inf * ak.ones_like(jets["pt"])
-            if self.verbose:
+            if self.verbose > 0:
                 warnings.warn("No Jet area, set all Jet area to -inf")
         
         # additionally, gen pt is needed for JER (only for MC)
         try:
             jets['pt_gen'] = ak.values_astype(ak.fill_none(jets.matched_gen.pt, 0), np.float32)
         except:
-            if self.verbose:
+            if self.verbose > 0:
                 warnings.warn("No GenJet information needed for JER/JERSF")
                 
         # apply JEC
@@ -399,6 +403,9 @@ class DeltaRMatching(SelectorABC):
         self.max_deltaR = max_deltaR
         
     def apply_deltaR_matching(self, first, second):
+        assert len(first) == len(second), "length of two physics objects must equal, but get {} and {}".format(len(first), len(second))
+        if len(first) == 0:
+            return first, second, 0
         matched = ak.cartesian([first, second])
         delta_R_one = matched.slot0.delta_r(matched.slot1) # compute delta r
         matched_mask = (delta_R_one < self.max_deltaR) # create mask
