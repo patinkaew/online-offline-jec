@@ -1,12 +1,15 @@
 import numpy as np
 import awkward as ak
+import hist
 
 from coffea import processor
 from coffea.lumi_tools import LumiMask, LumiData, LumiList
 
-from selector import *
-from accumulator import LumiAccumulator
+from .selector import *
+from .selectorbase import SelectorList
+from .accumulator import LumiAccumulator
 
+from collections import defaultdict
 import warnings
 
 class OHProcessor(processor.ProcessorABC):
@@ -77,9 +80,9 @@ class OHProcessor(processor.ProcessorABC):
         # however, cut earlier is better for performance
         # and make it easier to tag and probe
         off_jet_identification = JetIdentification(off_jet_Id, verbose)
-        self.off_jet_Id = EventWrappedPhysicsObjectSelector(off_jet_name, discard_empty=True)
+        self.off_jet_Id = EventWrappedPhysicsObjectSelector(off_jet_name, off_jet_identification, discard_empty=True)
         on_jet_identification = JetIdentification(on_jet_Id, verbose)
-        self.on_jet_Id = EventWrappedPhysicsObjectSelector(on_jet_name, discard_empty=True)
+        self.on_jet_Id = EventWrappedPhysicsObjectSelector(on_jet_name, on_jet_identification, discard_empty=True)
         
         off_jet_veto_map = JetVetoMap(off_jet_veto_map_json_path, off_jet_veto_map_correction_name, 
                                       off_jet_veto_map_year, off_jet_veto_map_type)
@@ -134,7 +137,9 @@ class OHProcessor(processor.ProcessorABC):
         if self.lumimask:
             events = events[self.lumimask(events.run, events.luminosityBlock)]
             cutflow["lumimask"] += len(events)
-        lumi_list = list(set(zip(events.run, events.luminosityBlock))) # save processed lumi list
+        #lumi_list = list(set(zip(events.run, events.luminosityBlock))) # save processed lumi list
+        lumi_list = LumiAccumulator(events.run, events.luminosityBlock) # save processed lumi list
+        #lumi_list = processor.accumulator.list_accumulator(zip(events.run, events.luminosityBlock))
         
         # events-level selections
         # good event cuts
@@ -271,6 +276,24 @@ class OHProcessor(processor.ProcessorABC):
         if self.verbose > 1:
             print("filling histogram: linear")
         
+        assert len(matched_on_jets) == len(matched_off_jets), "online and offline must have the same length for histogram filling, but get online: {} and offline: {}".format(len(matched_on_jets), len(matched_off_jets))
+        if len(matched_on_jets) == 0: # ak.flatten has axis=1 as default and this can raise error with 0 length
+            # no so sure how to really handle this
+            out = {
+                "pt_response": h_pt_response,
+                "pt_percent_diffence": h_pt_percent_diff, 
+                "jet_pt": h_jet_pt, 
+                "jet_eta": h_jet_eta,
+                "jet_phi": h_jet_phi,
+                "comparison": h_comp,
+                "cutflow": {dataset: cutflow},
+                "processed_lumi": {dataset: {"lumi_list": lumi_list}} #{dataset: {"lumi_list": lumi_list}}
+              }
+        
+            if self.off_jet_tagprobe.tag_min_pt or self.on_jet_tagprobe.tag_min_pt:
+                out["tag_and_probe"] = h_tp
+            return out
+        
         # TODO fix response type
         for response_type, pt_type in zip(["Raw", "Original", "Corrected"], ["pt_raw", "pt_orig", "pt_jec"]):
             pt_response = matched_on_jets.pt / matched_off_jets[pt_type]
@@ -381,7 +404,7 @@ class OHProcessor(processor.ProcessorABC):
                 "jet_phi": h_jet_phi,
                 "comparison": h_comp,
                 "cutflow": {dataset: cutflow},
-                "processed_lumi": {dataset: {"lumi_list": lumi_list}}
+                "processed_lumi": {dataset: {"lumi_list": lumi_list}} #{dataset: {"lumi_list": lumi_list}}
               }
         
         if self.off_jet_tagprobe.tag_min_pt or self.on_jet_tagprobe.tag_min_pt:
@@ -394,19 +417,25 @@ class OHProcessor(processor.ProcessorABC):
         if self.lumi_csv_path:
             lumidata = LumiData(self.lumi_csv_path)
             for dataset in accumulator["processed_lumi"]:
+                if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
+                    if self.verbose > 0:
+                        warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
                 # apply unique
                 lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
-                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1])
+                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
                 accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
                 # compute integrated luminosity
                 accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(lumi_list)
         else:
             for dataset in accumulator["processed_lumi"]:
+                if len(accumulator["processed_lumi"][dataset]["lumi_list"]) == 0:
+                    if self.verbose > 0:
+                        warnings.warn("no lumi blocks are processed for dataset: {}!".format(dataset))
                 # apply unique
                 lumi_list = np.array(accumulator["processed_lumi"][dataset]["lumi_list"])
-                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1])
+                lumi_list = LumiList(lumi_list[:, 0], lumi_list[:, 1]) if len(lumi_list) > 0 else LumiList()
                 accumulator["processed_lumi"][dataset]["lumi_list"] = lumi_list
-                
+
                 accumulator["processed_lumi"][dataset]["lumi"] = None
                 
         return accumulator
