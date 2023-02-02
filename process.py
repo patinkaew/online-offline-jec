@@ -157,10 +157,10 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
-    max_file = 10 # for testing
-    if max_file is not None:
-        for dataset in fileset:
-            fileset[dataset] = sorted(fileset[dataset])[:max_file]
+#    max_file = 10 # for testing
+#     if max_file is not None:
+#         for dataset in fileset:
+#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
     print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
