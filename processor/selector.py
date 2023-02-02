@@ -1,4 +1,4 @@
-from selectorbase import SelectorABC
+from .selectorbase import SelectorABC
 import numpy as np
 import awkward as ak
 from abc import abstractmethod
@@ -9,6 +9,7 @@ from coffea.jetmet_tools import JECStack, CorrectedJetsFactory
 from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
 import correctionlib
 
+from functools import partial
 import string
 import warnings
 
@@ -138,7 +139,7 @@ class EventWrappedPhysicsObjectSelector(SelectorABC):
         physics_object = self.physics_object_selector.apply(events[self.physics_object_name])
         events[self.physics_object_name] = physics_object
         if self.discard_empty:
-            events = events[events[self.physics_object_name] > 0]
+            events = events[ak.num(events[self.physics_object_name]) > 0]
         return events
     apply = apply_event_wrapped_physics_object_selector
     
@@ -150,6 +151,8 @@ class MaxLeadingObject(SelectorABC):
         self.max_leading = max_leading
     def apply_max_leading_object(self, physics_objects):
         if not self.max_leading:
+            return physics_objects
+        if len(physics_objects) == 0:
             return physics_objects
         return physics_objects[:, :self.max_leading]
     apply = apply_max_leading_object
@@ -370,7 +373,6 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
             jets["pt_raw"] = jets["pt"]
             jets["mass_raw"] = jets["mass"]
 
-        
         # pt, eta, area, and rho are needed for JEC
         jets['rho'] = ak.broadcast_arrays(events.Rho.fixedGridRhoFastjetAll, jets.pt)[0]
         if "area" not in jets.fields: # placeholder for jet area

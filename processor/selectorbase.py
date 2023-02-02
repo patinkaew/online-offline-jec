@@ -5,6 +5,8 @@ class SelectorABC(metaclass=ABCMeta):
         self._on = True
     def __call__(self, x):
         if self._on:
+            if len(x) == 0:
+                return x
             return self.apply(x)
         else:
             return x
