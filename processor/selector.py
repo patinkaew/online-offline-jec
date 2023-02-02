@@ -115,7 +115,7 @@ class MaxMET(SelectorABC):
         return events[events[self.MET_type].pt < self.max_MET]
     apply = apply_max_MET
 
-class MaxMET_sumET(SelectorABC):
+class MaxMET_sumET_old(SelectorABC):
     def __init__(self, max_MET_sumET, MET_type="MET"):
         super().__init__()
         self.MET_type = MET_type
@@ -124,6 +124,21 @@ class MaxMET_sumET(SelectorABC):
         if not self.max_MET_sumET:
             return events
         return events[events[self.MET_type].pt < self.max_MET_sumET * events[self.MET_type].sumEt]
+    apply = apply_max_MET_sumET
+    
+class MaxMET_sumET_above(SelectorABC):
+    def __init__(self, max_MET_sumET, min_MET=0, MET_type="MET"):
+        super().__init__()
+        self.MET_type = MET_type
+        self.max_MET_sumET = max_MET_sumET
+        self.min_MET = min_MET
+    def apply_max_MET_sumET(self, events):
+        if not self.max_MET_sumET:
+            return events
+        mask = (events[self.MET_type].pt < self.max_MET_sumET * events[self.MET_type].sumEt)
+        if self.min_MET > 0:
+            mask = mask | (events[self.MET_type].pt <= self.min_MET)
+        return events[mask]
     apply = apply_max_MET_sumET
 
 # wrap jet-level to event-level selector
