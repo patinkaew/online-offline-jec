@@ -67,21 +67,35 @@ class MinTrigger(SelectorABC):
         self.trigger_type = trigger_type
         
         # match-case only works with python >=3.10
-        match trigger_type:
-            case "None" | "none" | None:
-                self.trigger_type = None
-                self.comparison_operation = None
-            case "single":
-                self.comparison_operation = None # can also set to function which always returns false
-            case "only":
-                self.comparison_operation = (lambda pt, trigger_min_pt: pt != trigger_min_pt)
-            case "lower_not":
-                self.comparison_operation = (lambda pt, trigger_min_pt: pt < trigger_min_pt)
-            case "upper_not":
-                self.comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
-            case _:
-                raise ValueError("Invalid type of trigger cut")
-
+#         match trigger_type:
+#             case "None" | "none" | None:
+#                 self.trigger_type = None
+#                 self.comparison_operation = None
+#             case "single":
+#                 self.comparison_operation = None # can also set to function which always returns false
+#             case "only":
+#                 self.comparison_operation = (lambda pt, trigger_min_pt: pt != trigger_min_pt)
+#             case "lower_not":
+#                 self.comparison_operation = (lambda pt, trigger_min_pt: pt < trigger_min_pt)
+#             case "upper_not":
+#                 self.comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
+#             case _:
+#                 raise ValueError("Invalid type of trigger cut")
+        # LCG 102 use python 3.9.12
+        if trigger_type == None or trigger_type == "None" or trigger_type == "none":
+            self.trigger_type = None
+            self.comparison_operation = None
+        elif trigger_type == "single":
+            self.comparison_operation = None # can also set to function which always returns false
+        elif trigger_type == "only":
+            self.comparison_operation = (lambda pt, trigger_min_pt: pt != trigger_min_pt)
+        elif trigger_type == "lower_not":
+            self.comparison_operation = (lambda pt, trigger_min_pt: pt < trigger_min_pt)
+        elif trigger_type == "upper_not":
+            self.comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
+        else:
+            raise ValueError("Invalid type of trigger cut")
+            
     def apply_min_trigger(self, events):
         if (not self.trigger_type) or (not self.trigger_min_pt) or (self.trigger_min_pt <= 0):
             return events

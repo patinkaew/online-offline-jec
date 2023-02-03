@@ -4,9 +4,15 @@ import glob
 import json
 import datetime
 from functools import partial
+import sys
+import os
 
 from coffea import processor
 from coffea import util as cutil
+
+from dask.distributed import Client 
+from dask_lxplus import CernCluster
+import socket
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
 from processor.processor import OHProcessor
@@ -157,10 +163,10 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
-#    max_file = 10 # for testing
-#     if max_file is not None:
-#         for dataset in fileset:
-#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
+    max_file = 10 # for testing
+    if max_file is not None:
+        for dataset in fileset:
+            fileset[dataset] = sorted(fileset[dataset])[:max_file]
     print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
@@ -185,47 +191,141 @@ if __name__ == "__main__":
 #     exit()
       
     # define runner
-    executor = processor.IterativeExecutor(compression=None)
-    if configs["Runner"].getboolean("parallel", False):
-        executor = processor.FuturesExecutor(compression=None, workers=configs["Runner"].getint("num_workers", 1))
-    runner = processor.Runner(
-                    executor=executor,
-                    schema=JMENanoAODSchema,
-                    # size of each chunk to process (a unit of work), default to 100000
-                    # approximately, grow linearly with memory usage
-                    chunksize=configs["Runner"].getint("chunksize", 100_000),
+#     executor = processor.IterativeExecutor(compression=None)
+#     if configs["Runner"].getboolean("parallel", False):
+#         executor = processor.FuturesExecutor(compression=None, workers=configs["Runner"].getint("num_workers", 1))
+#     runner = processor.Runner(
+#                     executor=executor,
+#                     schema=JMENanoAODSchema,
+#                     # size of each chunk to process (a unit of work), default to 100000
+#                     # approximately, grow linearly with memory usage
+#                     chunksize=configs["Runner"].getint("chunksize", 100_000),
 
-                    # number of maximum chunks to process in each dataset, default to whole dataset
-                    # do not set this when running the full analysis
-                    # set this when testing
-                    maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
-                    )
+#                     # number of maximum chunks to process in each dataset, default to whole dataset
+#                     # do not set this when running the full analysis
+#                     # set this when testing
+#                     maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
+#                     )
+#         # processing
+#     print("="*50)
+#     print("Begin Processing")
+#     print("(Save file: {})".format(args.out_file))
+#     mkdir_if_not_exists(os.path.dirname(args.out_file))
+#     print("="*50)
+#     start_time = datetime.datetime.now()
+#     out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
+#     end_time = datetime.datetime.now()
+#     elapsed_time = end_time-start_time
+#     print("="*50)
     
-    # processing
-    print("="*50)
-    print("Begin Processing")
-    print("(Save file: {})".format(args.out_file))
-    mkdir_if_not_exists(os.path.dirname(args.out_file))
-    print("="*50)
-    start_time = datetime.datetime.now()
-    out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
-    end_time = datetime.datetime.now()
-    elapsed_time = end_time-start_time
-    print("="*50)
+#     print("Finish Processing")
+#     print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
+#     print_dict_json(out.get("cutflow", dict()), title="Cutflow")
     
-    print("Finish Processing")
-    print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
-    print_dict_json(out.get("cutflow", dict()), title="Cutflow")
+#     # post-processing output
+#     out["arguments"] = vars(args)
+#     out["configurations"] = configs._sections
+#     out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
+#     out["process_time"] = elapsed_time
+#     print("="*50)
     
-    # post-processing output
-    out["arguments"] = vars(args)
-    out["configurations"] = configs._sections
-    out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
-    out["process_time"] = elapsed_time
-    print("="*50)
+#     print("Save to Output file: {}".format(args.out_file))
+#     cutil.save(out, args.out_file)
+#     print("All Complete!")
     
-    print("Save to Output file: {}".format(args.out_file))
-    cutil.save(out, args.out_file)
-    print("All Complete!")
+#     espresso     = 20 minutes
+#     microcentury = 1 hour
+#     longlunch    = 2 hours
+#     workday      = 8 hours
+#     tomorrow     = 1 day
+#     testmatch    = 3 days
+#     nextweek     = 1 week
     
+    print("current interpreter: {}".format(sys.executable))
     
+    # configure for grid authentication
+    proxy_path = "/afs/cern.ch/user/p/pinkaew/private/gridproxy.pem"
+    os.environ['X509_USER_PROXY'] = proxy_path
+    if os.path.isfile(os.environ['X509_USER_PROXY']):
+        print("Found proxy at {}".format(os.environ['X509_USER_PROXY']))
+    else:
+        print("os.environ['X509_USER_PROXY'] ",os.environ['X509_USER_PROXY'])
+    os.environ['X509_CERT_DIR'] = '/cvmfs/cms.cern.ch/grid/etc/grid-security/certificates'
+    os.environ['X509_VOMS_DIR'] = '/cvmfs/cms.cern.ch/grid/etc/grid-security/vomsdir'
+    os.environ['X509_USER_CERT'] = proxy_path
+    
+    env_extra = [
+            'export XRD_RUNFORKHANDLER=1',
+            'export X509_USER_PROXY={}'.format(proxy_path),
+            'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),
+        ]
+
+    port_number = 9997
+    cern_cluster_config = {"cores": 1,
+                           "memory": "2000MB",
+                           "disk": "2000MB",
+                           "death_timeout":"60",
+                           "lcg": True, #is there a bug in dask_lxplus?, submitted issue
+                           "nanny": False,
+                           "container_runtime": "none",
+                           "log_directory": "/eos/user/p/pinkaew/condor/log",
+                           "scheduler_options": {"port": port_number, # port number to communicate with cluster
+                                                 "host": socket.gethostname()
+                                                },
+                           "job_extra": {"MY.JobFlavour": "'espresso'",
+                                        },
+                           "extra": ["--worker-port 10000:10100"],
+                           "env_extra": env_extra
+
+    }
+
+    # with defines the scope of cluster, client
+    # this ensures that cluster.close() and client.close() are called at the end
+    print("Iniatiating CernCluster")
+    with CernCluster(**cern_cluster_config) as cluster:
+        cluster.adapt(minimum=2, maximum=100)
+        cluster.scale(8)
+        print("Iniatiating Client")
+        with Client(cluster) as client:
+            # define runner
+            runner = processor.Runner(
+                                executor=processor.DaskExecutor(client=client, retries=6),
+                                schema=JMENanoAODSchema,
+                                # size of each chunk to process (a unit of work)
+                                # approximately, grow linearly with memory usage
+                                # chunksize=100000,
+
+                                # number of maximum chunks to process in each dataset, default to whole dataset.
+                                # do not set this when running the full analysis.
+                                # set this when testing
+                                maxchunks=10,
+                                # other arguments
+                                skipbadfiles=True,
+                                )
+
+            # processing
+            print("="*50)
+            print("Begin Processing")
+            print("(Save file: {})".format(args.out_file))
+            mkdir_if_not_exists(os.path.dirname(args.out_file))
+            print("="*50)
+            start_time = datetime.datetime.now()
+            out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
+            end_time = datetime.datetime.now()
+            elapsed_time = end_time-start_time
+            print("="*50)
+
+            print("Finish Processing")
+            print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
+            print_dict_json(out.get("cutflow", dict()), title="Cutflow")
+
+            # post-processing output
+            out["arguments"] = vars(args)
+            out["configurations"] = configs._sections
+            out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
+            out["process_time"] = elapsed_time
+            print("="*50)
+
+            print("Save to Output file: {}".format(args.out_file))
+            cutil.save(out, args.out_file)
+            print("All Complete!")

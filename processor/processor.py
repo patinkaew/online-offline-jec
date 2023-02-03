@@ -22,7 +22,8 @@ class OHProcessor(processor.ProcessorABC):
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
                  min_off_jet=0, min_on_jet=0, # event-level, select events with at least n jets
-                 MET_type="MET", max_MET=None, max_MET_sumET=None, # event-level, select max MET and/or max MET/sumET
+                 MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
+                 max_MET_sumET=None, min_MET=45, 
                  trigger_min_pt=0, # event-level, trigger cut
                  trigger_type=None, trigger_flag_prefix="PFJet", trigger_all_pts=None,
                  
@@ -70,7 +71,7 @@ class OHProcessor(processor.ProcessorABC):
         
         # MET cut
         self.max_MET = MaxMET(max_MET, MET_type)
-        self.max_MET_sumET = MaxMET_sumET(max_MET_sumET, MET_type)
+        self.max_MET_sumET = MaxMET_sumET(max_MET_sumET, min_MET, MET_type)
         
         # trigger cut
         self.min_trigger = MinTrigger(trigger_type, trigger_min_pt, trigger_flag_prefix, trigger_all_pts)
@@ -160,7 +161,7 @@ class OHProcessor(processor.ProcessorABC):
         events = self.max_MET(events)
         cutflow["MET < {}".format(self.max_MET.max_MET)] += len(events)
         events = self.max_MET_sumET(events)
-        cutflow["MET/sumET < {}".format(self.max_MET_sumET.max_MET_sumET)] += len(events)
+        cutflow["MET < {} or MET/sumET < {}".format(self.max_MET_sumET.min_MET, self.max_MET_sumET.max_MET_sumET)] += len(events)
         
         # trigger cut
         events = self.min_trigger(events)
