@@ -15,6 +15,13 @@ import warnings
 
 ### event-level ###
 ### apply: events -> events
+class LumiMaskBlock(SelectorABC):
+    def __init__(self, lumi_json_path):
+        pass
+    def apply_lumi_mask(self, events):
+        pass
+    apply = apply_lumi_mask
+    
 class MinNPVGood(SelectorABC):
     def __init__(self, min_NPVGood=0):
         super().__init__()
@@ -126,7 +133,7 @@ class MaxMET_sumET_old(SelectorABC):
         return events[events[self.MET_type].pt < self.max_MET_sumET * events[self.MET_type].sumEt]
     apply = apply_max_MET_sumET
     
-class MaxMET_sumET_above(SelectorABC):
+class MaxMET_sumET(SelectorABC):
     def __init__(self, max_MET_sumET, min_MET=0, MET_type="MET"):
         super().__init__()
         self.MET_type = MET_type
