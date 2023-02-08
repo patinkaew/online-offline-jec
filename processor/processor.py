@@ -36,6 +36,7 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_weight_filelist=None, on_jet_weight_filelist=None, # weight file for JEC
                  off_jet_tag_probe=True, on_jet_tag_probe=True, # whether to apply tag and probe
                  off_jet_tag_min_pt=0, on_jet_tag_min_pt=0, # tag min pt to apply during tag and probe
+                 off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
                  
                  max_leading_jet=None, # select up to n leading jets to fill histograms
                  storage=None, # storage type for Hist histograms
@@ -101,12 +102,12 @@ class OHProcessor(processor.ProcessorABC):
         # apply to offline jet
         self.off_jet_JEC = JECBlock(off_jet_weight_filelist, verbose)
         self.off_jet_tagprobe = TriggerDijetTagAndProbe(off_jet_tag_min_pt if off_jet_tag_probe else None, 
-                                                        max_alpha=1.0, swap=True)
+                                                        max_alpha=off_jet_max_alpha, swap=True)
         
         # apply to online jet
         self.on_jet_JEC = JECBlock(on_jet_weight_filelist, verbose)
         self.on_jet_tagprobe = TriggerDijetTagAndProbe(on_jet_tag_min_pt if on_jet_tag_probe else None, 
-                                                       max_alpha=1.0, swap=True)
+                                                       max_alpha=on_jet_max_alpha, swap=True)
         
         # delta R matching
         self.deltaR_matching = DeltaRMatching(max_deltaR=0.2)
@@ -221,8 +222,7 @@ class OHProcessor(processor.ProcessorABC):
                    1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172,  2.322,  2.5,  2.65,
                    2.853,  2.964,  3.139,  3.314,  3.489,  3.664,  3.839,  4.013,  4.191,  4.363,  4.538,  4.716,
                    4.889, 5.191 ])
-        
-        
+           
         # bookkeeping axes
         dataset_axis = hist.axis.StrCategory([], name="dataset", label="Primary Dataset", growth=True)
         response_type_axis = hist.axis.StrCategory(["Raw", "Original", "Corrected"], 
