@@ -12,6 +12,8 @@ from .accumulator import LumiAccumulator
 from collections import defaultdict
 import warnings
 
+import time
+
 class OHProcessor(processor.ProcessorABC):
     def __init__(self, 
                  off_jet_name, off_jet_label=None, # offline jet
@@ -39,6 +41,7 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
                  
                  max_leading_jet=None, # select up to n leading jets to fill histograms
+                 max_deltaR=0.2, # for deltaR matching
                  storage=None, # storage type for Hist histograms
                  verbose=0):
         
@@ -67,8 +70,11 @@ class OHProcessor(processor.ProcessorABC):
         self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
         
         # minimum number of jets
-        self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet)
-        self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet)
+        # if tag and probe will be applied, need at least 2
+        min_off_jet = min_off_jet if not off_jet_tag_probe else max(min_off_jet, 2) 
+        min_on_jet = min_on_jet if not on_jet_tag_probe else max(min_on_jet, 2) 
+        self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet, name=off_jet_label)
+        self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet, name=on_jet_label)
         
         # MET cut
         self.max_MET = MaxMET(max_MET, MET_type)
@@ -81,39 +87,35 @@ class OHProcessor(processor.ProcessorABC):
         # intuitively, these selectors act on jet
         # however, cut earlier is better for performance
         # and make it easier to tag and probe
-        off_jet_identification = JetIdentification(off_jet_Id, verbose)
+        off_jet_identification = JetIdentification(off_jet_Id, off_jet_label, verbose)
         self.off_jet_Id = EventWrappedPhysicsObjectSelector(off_jet_name, off_jet_identification, discard_empty=True)
-        on_jet_identification = JetIdentification(on_jet_Id, verbose)
+        on_jet_identification = JetIdentification(on_jet_Id, on_jet_label, verbose)
         self.on_jet_Id = EventWrappedPhysicsObjectSelector(on_jet_name, on_jet_identification, discard_empty=True)
         
         off_jet_veto_map = JetVetoMap(off_jet_veto_map_json_path, off_jet_veto_map_correction_name, 
-                                      off_jet_veto_map_year, off_jet_veto_map_type)
+                                      off_jet_veto_map_year, off_jet_veto_map_type, off_jet_label)
         self.off_jet_veto_map = EventWrappedPhysicsObjectSelector(off_jet_name, off_jet_veto_map, discard_empty=True)
         
         on_jet_veto_map = JetVetoMap(on_jet_veto_map_json_path, on_jet_veto_map_correction_name, 
-                                     on_jet_veto_map_year, on_jet_veto_map_type)
+                                     on_jet_veto_map_year, on_jet_veto_map_type, on_jet_label)
         self.on_jet_veto_map = EventWrappedPhysicsObjectSelector(on_jet_name, on_jet_veto_map, discard_empty=True)
-        
-        # additional cuts if tag and probe will be applied
-        self.tp_min_on_jet = MinPhysicsObject(on_jet_name, 2 if on_jet_tag_probe else 0)
-        self.tp_min_off_jet = MinPhysicsObject(off_jet_name, 2 if off_jet_tag_probe else 0)
         
         # jet-level selections
         # apply to offline jet
-        self.off_jet_JEC = JECBlock(off_jet_weight_filelist, verbose)
+        self.off_jet_JEC = JECBlock(off_jet_weight_filelist, off_jet_label, verbose)
         self.off_jet_tagprobe = TriggerDijetTagAndProbe(off_jet_tag_min_pt if off_jet_tag_probe else None, 
-                                                        max_alpha=off_jet_max_alpha, swap=True)
+                                                        max_alpha=off_jet_max_alpha, swap=True, name=off_jet_label)
         
         # apply to online jet
-        self.on_jet_JEC = JECBlock(on_jet_weight_filelist, verbose)
+        self.on_jet_JEC = JECBlock(on_jet_weight_filelist, on_jet_label, verbose)
         self.on_jet_tagprobe = TriggerDijetTagAndProbe(on_jet_tag_min_pt if on_jet_tag_probe else None, 
-                                                       max_alpha=on_jet_max_alpha, swap=True)
+                                                       max_alpha=on_jet_max_alpha, swap=True, name=on_jet_label)
         
         # delta R matching
-        self.deltaR_matching = DeltaRMatching(max_deltaR=0.2)
+        self.deltaR_matching = DeltaRMatching(max_deltaR=max_deltaR)
         
         # select only n leading jets to fill histograms
-        self.max_leading_jet = MaxLeadingObject(max_leading_jet)
+        self.max_leading_jet = MaxLeadingObject(max_leading_jet, name="jet")
         
         # histograms
         self.storage = storage
@@ -125,11 +127,16 @@ class OHProcessor(processor.ProcessorABC):
         # bookkeeping for dataset's name
         dataset = events.metadata.get("dataset", "untitled")
         
+        time_pf = defaultdict(float)
+        last_time = time.time()
         # TrigObjJMEAK{4, 8} are not sorted by pt...
         for physics_object_name in ["TrigObjJMEAK4", "TrigObjJMEAK8"]:
             if physics_object_name in [self.off_jet_name, self.on_jet_name]:
                 sort_index = ak.argsort(events[physics_object_name].pt, ascending=False)
                 events[physics_object_name] = (events[physics_object_name])[sort_index]
+        elapsed_time = time.time() - last_time
+        time_pf["sorting"] += elapsed_time
+        last_time = time.time()
         
         # define cutflow
         cutflow = defaultdict(int)
@@ -145,42 +152,28 @@ class OHProcessor(processor.ProcessorABC):
         
         # events-level selections
         # good event cuts
-        events = self.min_npvgood(events)
-        cutflow["NPV > {}".format(self.min_npvgood.min_NPVGood)] += len(events)
-        events = self.max_pv_z(events)
-        cutflow["PV |Z| < {} cm".format(self.max_pv_z.max_PV_z)] += len(events)
-        events = self.max_pv_rxy(events)
-        cutflow["PV |r_xy| < {} cm".format(self.max_pv_rxy.max_PV_rxy)] += len(events)
-        
-        # minimum numbers of jets
-        events = self.min_off_jet(events)
-        cutflow["offline jet >= {}".format(self.min_off_jet.min_physics_object)] += len(events)
-        events = self.min_on_jet(events)
-        cutflow["online jet >= {}".format(self.min_on_jet.min_physics_object)] += len(events)
+        events = self.min_npvgood(events, cutflow)
+        events = self.max_pv_z(events, cutflow)
+        events = self.max_pv_rxy(events, cutflow)
         
         # MET cuts
-        events = self.max_MET(events)
-        cutflow["MET < {}".format(self.max_MET.max_MET)] += len(events)
-        events = self.max_MET_sumET(events)
-        cutflow["MET < {} or MET/sumET < {}".format(self.max_MET_sumET.min_MET, self.max_MET_sumET.max_MET_sumET)] += len(events)
+        events = self.max_MET(events, cutflow)
+        events = self.max_MET_sumET(events, cutflow)
         
         # trigger cut
-        events = self.min_trigger(events)
-        cutflow["trigger cut"] += len(events)
+        events = self.min_trigger(events, cutflow)
         
         # event-level wrapped jet-level selectors
         # jet identification
-        events = self.off_jet_Id(events)
-        events = self.on_jet_Id(events)
+        events = self.off_jet_Id(events, cutflow)
+        events = self.on_jet_Id(events, cutflow)
         # jet veto map
-        events = self.off_jet_veto_map(events)
-        events = self.on_jet_veto_map(events)
-            
-        # additional cuts if tag and probe will be applied
-        events = self.tp_min_on_jet(events) # at least two HLT dijet (online)
-        cutflow["tag and probe online jet >= {}".format(self.tp_min_on_jet.min_physics_object)] += len(events)
-        events = self.tp_min_off_jet(events) # at least two offline dijet
-        cutflow["tag and probe offline jet >= {}".format(self.tp_min_off_jet.min_physics_object)] += len(events)
+        events = self.off_jet_veto_map(events, cutflow)
+        events = self.on_jet_veto_map(events, cutflow)
+        
+        # minimum numbers of jets
+        events = self.min_off_jet(events, cutflow)
+        events = self.min_on_jet(events, cutflow)
         
         # jet-level selections
         # retrive offline and online jets
@@ -190,24 +183,27 @@ class OHProcessor(processor.ProcessorABC):
         # apply to offline jets
         if self.verbose > 1:
             print("processing offline jets")
-        off_jets = self.off_jet_JEC(off_jets, events)
-        if self.off_jet_tagprobe.tag_min_pt:
-            off_jets_tag, off_jets = self.off_jet_tagprobe(off_jets[:, 0], off_jets[:, 1], off_jets)
+        off_jets = self.off_jet_JEC(off_jets, events, cutflow)
+        if self.off_jet_tagprobe.status and len(off_jets) > 0: # prevent error when indexing 0 or 1
+            off_jets_tag, off_jets = self.off_jet_tagprobe(off_jets[:, 0], off_jets[:, 1], off_jets, cutflow)
         
         # apply to online jets
         if self.verbose > 1:
             print("processing online jets")
-        on_jets = self.on_jet_JEC(on_jets, events)
-        if self.on_jet_tagprobe.tag_min_pt:
-            on_jets_tag, on_jets = self.on_jet_tagprobe(on_jets[:, 0], on_jets[:, 1], on_jets)
+        on_jets = self.on_jet_JEC(on_jets, events, cutflow)
+        if self.on_jet_tagprobe.status and len(on_jets) > 0:
+            on_jets_tag, on_jets = self.on_jet_tagprobe(on_jets[:, 0], on_jets[:, 1], on_jets, cutflow)
         
         # delta R matching
-        matched_off_jets, matched_on_jets, matched_count = self.deltaR_matching(off_jets, on_jets)
-        cutflow["delta R < {}".format(self.deltaR_matching.max_deltaR)] += matched_count
+        matched_off_jets, matched_on_jets = self.deltaR_matching(off_jets, on_jets, cutflow)
         
         # select n leading jets to plot
         matched_off_jets = self.max_leading_jet(matched_off_jets)
         matched_on_jets = self.max_leading_jet(matched_on_jets)
+        
+        elapsed_time = time.time() - last_time
+        time_pf["selection"] += elapsed_time
+        last_time = time.time()
         
         # define axes for output histograms
         # this is roughly log-scale
@@ -268,10 +264,14 @@ class OHProcessor(processor.ProcessorABC):
                            name="comparison", label="Online vs Offline")
         
         # tag and probe histogram
-        if self.off_jet_tagprobe.tag_min_pt or self.on_jet_tagprobe.tag_min_pt:
+        if self.off_jet_tagprobe.status or self.on_jet_tagprobe.status:
             h_tp = hist.Hist(dataset_axis, jet_pt_axis, jet_type_axis, jet_eta_axis, jet_phi_axis, 
                              tp_diff_ratio_axis, storage=self.storage,
                              name="tag_and_probe", label="Tag and Probe")
+        
+        elapsed_time = time.time() - last_time
+        time_pf["creating histograms"] += elapsed_time
+        last_time = time.time()
         
         # filling histograms
         if self.verbose > 1:
@@ -291,8 +291,10 @@ class OHProcessor(processor.ProcessorABC):
                 "processed_lumi": {dataset: {"lumi_list": lumi_list}} #{dataset: {"lumi_list": lumi_list}}
               }
         
-            if self.off_jet_tagprobe.tag_min_pt or self.on_jet_tagprobe.tag_min_pt:
+            if self.off_jet_tagprobe.status or self.on_jet_tagprobe.status:
                 out["tag_and_probe"] = h_tp
+            
+            out["time_pf"] = time_pf
             return out
         
         # TODO fix response type
@@ -375,13 +377,13 @@ class OHProcessor(processor.ProcessorABC):
             
             # tag and probe histogram
             # NB: these are unmatched (before deltaR matching)!
-            if self.off_jet_tagprobe.tag_min_pt:  
+            if self.off_jet_tagprobe.status:  
                 h_tp.fill(dataset=dataset, jet_type=self.off_jet_label, \
                           jet_pt=ak.flatten(off_jets_tag.pt), \
                           jet_eta=ak.flatten(off_jets_tag.eta), \
                           jet_phi=ak.flatten(off_jets_tag.phi), \
                           tp_diff_ratio=ak.flatten((off_jets.pt - off_jets_tag.pt) / off_jets_tag.pt))
-            if self.on_jet_tagprobe.tag_min_pt:
+            if self.on_jet_tagprobe.status:
                 h_tp.fill(dataset=dataset, jet_type=self.on_jet_label, \
                           jet_pt=ak.flatten(on_jets_tag.pt), \
                           jet_eta=ak.flatten(on_jets_tag.eta), \
@@ -405,12 +407,17 @@ class OHProcessor(processor.ProcessorABC):
                 "jet_phi": h_jet_phi,
                 "comparison": h_comp,
                 "cutflow": {dataset: cutflow},
-                "processed_lumi": {dataset: {"lumi_list": lumi_list}} #{dataset: {"lumi_list": lumi_list}}
+                "processed_lumi": {dataset: {"lumi_list": lumi_list}}
               }
         
-        if self.off_jet_tagprobe.tag_min_pt or self.on_jet_tagprobe.tag_min_pt:
+        if self.off_jet_tagprobe.status or self.on_jet_tagprobe.status:
             out["tag_and_probe"] = h_tp
-            
+        
+        elapsed_time = time.time() - last_time
+        time_pf["filling histograms"] += elapsed_time
+        last_time = time.time()
+        out["time_pf"] = time_pf
+        
         return out
         
     def postprocess(self, accumulator):

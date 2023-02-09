@@ -17,43 +17,61 @@ import warnings
 ### apply: events -> events
 class LumiMaskBlock(SelectorABC):
     def __init__(self, lumi_json_path):
-        pass
+        self._lumimask = LumiMask(lumi_json_path) if lumi_json_path else None
+    def __str__():
+        return "lumimask"
     def apply_lumi_mask(self, events):
-        pass
+        if not self._lumimask:
+            return events
+        return self._lumimask(events.run, events.luminosityBlock)
     apply = apply_lumi_mask
     
 class MinNPVGood(SelectorABC):
     def __init__(self, min_NPVGood=0):
         super().__init__()
-        self.min_NPVGood = min_NPVGood
+        self._min_NPVGood = min_NPVGood
+    def __str__(self):
+        return "NPV > {}".format(self._min_NPVGood)
     def apply_min_NPVGood(self, events):
-        return events[events.PV.npvsGood > self.min_NPVGood]
+        return events[events.PV.npvsGood > self._min_NPVGood]
     apply = apply_min_NPVGood
     
 class MaxPV_z(SelectorABC):
     def __init__(self, max_PV_z=24):
         super().__init__()
-        self.max_PV_z = max_PV_z
+        self._max_PV_z = max_PV_z
+    def __str__(self):
+        return "PV |z| < {} cm".format(self._max_PV_z)
     def apply_max_PV_z(self, events):
-        return events[np.abs(events.PV.z) < self.max_PV_z]
+        return events[np.abs(events.PV.z) < self._max_PV_z]
     apply = apply_max_PV_z
     
 class MaxPV_rxy(SelectorABC):
     def __init__(self, max_PV_rxy=2):
         super().__init__()
-        self.max_PV_rxy = max_PV_rxy
+        self._max_PV_rxy = max_PV_rxy
+    def __str__(self):
+        return "PV |r_xy| < {} cm".format(self._max_PV_rxy)
     def apply_max_PV_rxy(self, events):
-        return events[np.sqrt(events.PV.x*events.PV.x + events.PV.y*events.PV.y) < self.max_PV_rxy]
+        return events[np.sqrt(events.PV.x*events.PV.x + events.PV.y*events.PV.y) < self._max_PV_rxy]
     apply = apply_max_PV_rxy
 
 class MinPhysicsObject(SelectorABC):
-    def __init__(self, physics_object_name, min_physics_object=0):
+    def __init__(self, physics_object_name, min_physics_object=0, name=""):
         super().__init__()
-        self.physics_object_name = physics_object_name
-        self.min_physics_object = min_physics_object
+        self._physics_object_name = physics_object_name
+        self._min_physics_object = min_physics_object
+        self._name = name if name != None or len(name) > 0 else physics_object_name
+    def __str__(self):
+        return "{} >= {}".format(self._name, self._min_physics_object)
     def apply_min_physics_object(self, events):
-        return events[(ak.num(events[self.physics_object_name]) >= self.min_physics_object)] 
+        return events[(ak.num(events[self._physics_object_name]) >= self._min_physics_object)] 
     apply = apply_min_physics_object
+
+class MinJet(MinPhysicsObject):
+    def __init__(self, jet_name, min_jet=0, name=""):
+        super().__init__(jet_name, min_jet, name)
+    apply_min_jet = MinPhysicsObject.apply
 
 class MinTrigger(SelectorABC):
     def __init__(self, trigger_type="single", trigger_min_pt=0, trigger_flag_prefix="PFJet", trigger_all_pts=None):
@@ -61,10 +79,10 @@ class MinTrigger(SelectorABC):
         if trigger_type in ["only", "lower_not", "upper_not"]:
             assert trigger_all_pts != None, "trigger type: {} need all trigger pts".format(trigger_type)
             
-        self.trigger_min_pt = trigger_min_pt
-        self.trigger_flag_prefix = trigger_flag_prefix
-        self.trigger_all_pts = trigger_all_pts
-        self.trigger_type = trigger_type
+        self._trigger_min_pt = trigger_min_pt
+        self._trigger_flag_prefix = trigger_flag_prefix
+        self._trigger_all_pts = trigger_all_pts
+        self._trigger_type = trigger_type
         
         # match-case only works with python >=3.10
 #         match trigger_type:
@@ -83,29 +101,30 @@ class MinTrigger(SelectorABC):
 #                 raise ValueError("Invalid type of trigger cut")
         # LCG 102 use python 3.9.12
         if trigger_type == None or trigger_type == "None" or trigger_type == "none":
-            self.trigger_type = None
-            self.comparison_operation = None
+            self._trigger_type = None
+            self._comparison_operation = None
         elif trigger_type == "single":
-            self.comparison_operation = None # can also set to function which always returns false
+            self._comparison_operation = None # can also set to function which always returns false
         elif trigger_type == "only":
-            self.comparison_operation = (lambda pt, trigger_min_pt: pt != trigger_min_pt)
+            self._comparison_operation = (lambda pt, trigger_min_pt: pt != trigger_min_pt)
         elif trigger_type == "lower_not":
-            self.comparison_operation = (lambda pt, trigger_min_pt: pt < trigger_min_pt)
+            self._comparison_operation = (lambda pt, trigger_min_pt: pt < trigger_min_pt)
         elif trigger_type == "upper_not":
-            self.comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
+            self._comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
         else:
             raise ValueError("Invalid type of trigger cut")
-            
+    def __str__(self):
+        return "trigger {}{} ({})".format(self._trigger_flag_prefix, self._trigger_min_pt, self._trigger_type)
     def apply_min_trigger(self, events):
-        if (not self.trigger_type) or (not self.trigger_min_pt) or (self.trigger_min_pt <= 0):
+        if (not self._trigger_type) or (not self._trigger_min_pt) or (self._trigger_min_pt <= 0):
             return events
         
-        mask = events.HLT[self.trigger_flag_prefix + str(self.trigger_min_pt)] # single mask as base
-        if self.trigger_all_pts != None and self.comparison_operation != None:
+        mask = events.HLT[self._trigger_flag_prefix + str(self._trigger_min_pt)] # single mask as base
+        if self._trigger_all_pts != None and self._comparison_operation != None:
             # alternatively, setting trigger_all_pts = [trigger_min_pt] will give the same result
-            for pt in self.trigger_all_pts:
-                if self.comparison_operation(pt, self.trigger_min_pt):
-                    flag = self.trigger_flag_prefix + str(pt)
+            for pt in self._trigger_all_pts:
+                if self._comparison_operation(pt, self._trigger_min_pt):
+                    flag = self._trigger_flag_prefix + str(pt)
                     mask = np.logical_and(mask, np.logical_not(events.HLT[flag]))
         return events[mask]
     apply = apply_min_trigger
@@ -113,52 +132,49 @@ class MinTrigger(SelectorABC):
 class FlagFilter(SelectorABC):
     def __init__(self, flag_filter):
         super().__init__()
-        self.flag_filter = flag_filter
+        self._flag_filter = flag_filter
+    def __str__(self):
+        return self._flag_filter
     def apply_flag_filter(self, events):
-        if not self.flag_filter:
+        if not self._flag_filter:
             return events
-        return events[events.Flag[self.flag_filter]]
+        return events[events.Flag[self._flag_filter]]
     apply = apply_flag_filter
 
 class METFilter(FlagFilter):
     def __init__(self):
         super().__init__("METFilters")
-    apply_met_filter = FlagFilter.apply_flag_filter
+    apply_met_filter = FlagFilter.apply
 
 class MaxMET(SelectorABC):
     def __init__(self, max_MET, MET_type="MET"):
         super().__init__()
-        self.MET_type = MET_type
-        self.max_MET = max_MET
+        self._MET_type = MET_type
+        self._max_MET = max_MET
+    def __str__(self):
+        return "{} < {} GeV".format(self._MET_type, self._max_MET)
     def apply_max_MET(self, events):
-        if not self.max_MET:
+        if not self._max_MET:
             return events
-        return events[events[self.MET_type].pt < self.max_MET]
+        return events[events[self._MET_type].pt < self._max_MET]
     apply = apply_max_MET
-
-class MaxMET_sumET_old(SelectorABC):
-    def __init__(self, max_MET_sumET, MET_type="MET"):
-        super().__init__()
-        self.MET_type = MET_type
-        self.max_MET_sumET = max_MET_sumET
-    def apply_max_MET_sumET(self, events):
-        if not self.max_MET_sumET:
-            return events
-        return events[events[self.MET_type].pt < self.max_MET_sumET * events[self.MET_type].sumEt]
-    apply = apply_max_MET_sumET
     
 class MaxMET_sumET(SelectorABC):
     def __init__(self, max_MET_sumET, min_MET=0, MET_type="MET"):
         super().__init__()
-        self.MET_type = MET_type
-        self.max_MET_sumET = max_MET_sumET
-        self.min_MET = min_MET
+        self._MET_type = MET_type
+        self._max_MET_sumET = max_MET_sumET
+        self._min_MET = min_MET
+    def __str__(self):
+        if self._min_MET <= 0:
+            return "{}/sumET < {}".format(self._MET_type, self._max_MET_sumET)
+        return "{} <= {} GeV or {}/sumET < {}".format(self._MET_type, self._min_MET, self._MET_type, self._max_MET_sumET)
     def apply_max_MET_sumET(self, events):
-        if not self.max_MET_sumET:
+        if not self._max_MET_sumET:
             return events
-        mask = (events[self.MET_type].pt < self.max_MET_sumET * events[self.MET_type].sumEt)
-        if self.min_MET > 0:
-            mask = mask | (events[self.MET_type].pt <= self.min_MET)
+        mask = (events[self._MET_type].pt < self._max_MET_sumET * events[self._MET_type].sumEt)
+        if self._min_MET > 0:
+            mask = mask | (events[self._MET_type].pt <= self._min_MET)
         return events[mask]
     apply = apply_max_MET_sumET
 
@@ -166,81 +182,105 @@ class MaxMET_sumET(SelectorABC):
 class EventWrappedPhysicsObjectSelector(SelectorABC): 
     def __init__(self, physics_object_name, physics_object_selector, discard_empty=False):
         super().__init__()
-        self.physics_object_name = physics_object_name
-        self.physics_object_selector = physics_object_selector
-        self.discard_empty = discard_empty
+        self._physics_object_name = physics_object_name
+        self._physics_object_selector = physics_object_selector
+        self._discard_empty = discard_empty
+    def __str__(self):
+        return str(self._physics_object_selector)
     def apply_event_wrapped_physics_object_selector(self, events):
         # physics_object_selector.apply will ignore physics_object_selector's status
         # now this will use EventPhysicsObject's status during __call__
-        physics_object = self.physics_object_selector.apply(events[self.physics_object_name])
-        events[self.physics_object_name] = physics_object
-        if self.discard_empty:
-            events = events[ak.num(events[self.physics_object_name]) > 0]
+        physics_object = self._physics_object_selector.apply(events[self._physics_object_name])
+        events[self._physics_object_name] = physics_object
+        if self._discard_empty:
+            events = events[ak.num(events[self._physics_object_name]) > 0]
         return events
     apply = apply_event_wrapped_physics_object_selector
     
 ### jet-level ###
 ### apply: physics_objects -> physics_objects, e.g. jets -> jets
-class MaxLeadingObject(SelectorABC):
-    def __init__(self, max_leading=None):
+# class MinPhysicsObject(SelectorABC):
+#     def __init__(self, min_physics_object=0, name=""):
+#         super().__init__()
+#         assert len(name) and name != None, "must provide unique name"
+#         self._min_physics_object = min_physics_object
+#         self._name = name
+#     def __str__(self):
+#         return "{} >= {}".format(self._name, self._min_physics_object)
+#     def apply_min_physics_object(self, physics_objects):
+#         return physics_objects[(ak.num(physics_objects) >= self._min_physics_object)] 
+#     apply = apply_min_physics_object
+
+class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied actually. For T&P, this shouldn't matter
+    def __init__(self, max_leading, name=""):
         super().__init__()
-        self.max_leading = max_leading
+        if max_leading:
+            assert len(name) and name != None, "must provide unique name"
+        self._max_leading = max_leading
+        self._name = name
+    def __str__(self):
+        return "{}: upto {} leading".format(self._name, self._max_leading)
     def apply_max_leading_object(self, physics_objects):
-        if not self.max_leading:
+        if not self._max_leading:
             return physics_objects
         if len(physics_objects) == 0:
             return physics_objects
-        return physics_objects[:, :self.max_leading]
+        return physics_objects[:, :self._max_leading]
     apply = apply_max_leading_object
 
 class JetIdentification(SelectorABC):
-    def __init__(self, jet_Id, verbose):
+    def __init__(self, jet_Id, name="", verbose=0):
         super().__init__()
         if jet_Id:
-            self.jet_Id = jet_Id
+            assert len(name) and name != None, "must provide unique name"
+            self._jet_Id = jet_Id
             jet_Id_bit_dict = {"loose":1, "tight":2, "tightleptonveto":4}
             if isinstance(jet_Id, str):
                 jet_Id = jet_Id.split()
                 if len(jet_Id) == 1:
                     jet_Id = jet_Id[0]
                     assert jet_Id.lower() in jet_Id_bit_dict.keys(), "cannot identify jet_Id {}".format(jet_Id)
-                    self.jet_Id = jet_Id_bit_dict[jet_Id.lower()]
+                    self._jet_Id = jet_Id_bit_dict[jet_Id.lower()]
                 else:
-                    self.jet_Id = 0
+                    self._jet_Id = 0
                     for jet_id in jet_Id:
                         assert jet_id.lower() in jet_Id_bit_dict.keys(), "cannot identify jet_Id {}".format(jet_id)
-                        self.jet_Id += jet_Id_bit_dict[jet_id.lower()]
+                        self._jet_Id += jet_Id_bit_dict[jet_id.lower()] # bitwise-or in base 2 is add in base 10
             elif isinstance(jet_Id, int):
                 assert 0 <= jet_Id <= 7, "jet_Id must be in [0, 7], but get {}".format(jet_Id)
             else:
                 raise TypeError("expect jet_Id as int or str, but get {}".format(type(jet_Id)))
         else:
-            self.jet_Id = None
-            self.off()
-        self.verbose = verbose
+            self._jet_Id = None
+        self._name = name
+        self._verbose = verbose
+    def __str__(self):
+        return "{}: jet id {}".format(self._name, self._jet_Id)
     def apply_jet_identification(self, jets):
-        if not self.jet_Id:
+        if not self._jet_Id:
             return jets
         if not "jetId" in jets.fields:
-            if self.verbose > 0:
+            if self._verbose > 0:
                 warnings.warn("cannot retrieve jetId, no jetId will be applied")
             return jets
-        return jets[jets.jetId == self.jet_Id]
+        return jets[jets.jetId == self._jet_Id]
     apply = apply_jet_identification
     
 class JetVetoMap(SelectorABC):
     def __init__(self, jet_veto_map_json_path, jet_veto_map_correction_name,
-                 jet_veto_map_year, jet_veto_map_type="jetvetomap"):
+                 jet_veto_map_year, jet_veto_map_type="jetvetomap", name=""):
         super().__init__()
         if jet_veto_map_json_path:
+            assert len(name) and name != None, "must provide unique name"
             corr = correctionlib.CorrectionSet.from_file(jet_veto_map_json_path)[jet_veto_map_correction_name]
-            self.jet_veto_map = partial(corr.evaluate, jet_veto_map_year, jet_veto_map_type)
+            self._jet_veto_map = partial(corr.evaluate, jet_veto_map_year, jet_veto_map_type)
         else:
-            self.jet_veto_map = None
-            self.off()
-        
+            self._jet_veto_map = None
+        self._name = name
+    def __str__(self):
+        return "{}: jet veto map".format(self._name)
     def apply_jet_veto_map(self, jets):
-        if not self.jet_veto_map:
+        if not self._jet_veto_map:
             return jets
         # flatten and unflatten (this is required for correctionlib API)
         jets_flat = ak.flatten(jets)
@@ -248,26 +288,31 @@ class JetVetoMap(SelectorABC):
         jets_flat_phi = jets_flat.phi # wrap phi in (-pi, pi]
         jets_flat_phi = ak.where(jets_flat_phi <= -np.pi, 2*np.pi + jets_flat_phi, jets_flat_phi)
         jets_flat_phi = ak.where(jets_flat_phi > np.pi, -2*np.pi + jets_flat_phi, jets_flat_phi)
-        mask_flat = (self.jet_veto_map(jets_flat.eta, jets_flat_phi) == 0)
+        mask_flat = (self._jet_veto_map(jets_flat.eta, jets_flat_phi) == 0)
         mask = ak.unflatten(mask_flat, counts=counts)
         return jets[mask]
     apply = apply_jet_veto_map
 
-### Other no standard selectors (not x -> smaller x)
+### Other non standard selectors (not usual x -> smaller x)
 ### tag and probe ###
 class TagAndProbeABC(SelectorABC):
-    def __init__(self, swap=True):
+    def __init__(self, swap=True, name=""):
         # in fact, tag_condition is subset of tag_probe_condition which is also subset of other_condition
         # this is just to make an explicit distinction
         super().__init__()
-        self.swap = swap
-        
+        self._swap = swap
+        assert len(name) and name != None, "must provide unique name"
+        self._name = name
+    def __str__(self):
+        return "{}: unnamed tag and probe".format(self._name)
     @abstractmethod
-    def tag_condition(self, tag):
+    def tag_condition(self, tag): 
+        # return tag mask, i.e. what condition make an object passing tag
         raise NotImplementedError
     
     @abstractmethod
-    def tag_probe_condition(self, tag, probe):
+    def tag_probe_condition(self, tag, probe): 
+        # return tag-probe mask, i.e. what condition make two objects are paired as tag and probe
         raise NotImplementedError
         
     def other_condition(self, tag, probe, others):
@@ -286,7 +331,7 @@ class TagAndProbeABC(SelectorABC):
             return mask
         
         mask = make_tag_probe_mask(tag, probe)
-        if self.swap:
+        if self._swap:
             combine = lambda x, y: ak.concatenate([ak.unflatten(x, counts=1), ak.unflatten(y, counts=1)], 
                                                   axis=1, mergebool=False)
             swap_mask = make_tag_probe_mask(probe, tag)
@@ -295,26 +340,31 @@ class TagAndProbeABC(SelectorABC):
         return tag[mask], probe[mask]
     apply = apply_tag_and_probe
     
-    def __call__(self, tag, probe, others=None):
+    def __call__(self, tag, probe, others=None, cutflow=None):
         if self.status:
-            return self.apply(tag, probe, others)
+            tag, probe = self.apply(tag, probe, others)
         else:
-            if self.swap:
+            if self._swap:
                 combine = lambda x, y: ak.concatenate([ak.unflatten(x, counts=1), ak.unflatten(y, counts=1)], 
                                                       axis=1, mergebool=False)
                 tag, probe = combine(tag, probe), combine(probe, tag)
-            return tag, probe
+        if cutflow: 
+            # to prevent confusion during delta R matching, number of events will not change
+            # but for cutflow, it is more useful to count non-empty events
+            cutflow[str(self)] += np.sum(ak.num(probe) > 0)
+        return tag, probe
 
 class TriggerDijetTagAndProbe(TagAndProbeABC):
-    def __init__(self, tag_min_pt, max_alpha=None, swap=True):
-        super().__init__(swap=swap)
-        self.tag_min_pt = tag_min_pt
-        self.max_alpha = max_alpha
+    def __init__(self, tag_min_pt, max_alpha=None, swap=True, name=""):
+        super().__init__(swap=swap, name=name)
+        self._tag_min_pt = tag_min_pt
+        self._max_alpha = max_alpha
         if not tag_min_pt:
             self.off()
-            
+    def __str__(self):
+        return "{}: dijet tag and probe".format(self._name)
     def tag_condition(self, tag):
-        tag_cut = (tag.pt >= self.tag_min_pt)
+        tag_cut = (tag.pt >= self._tag_min_pt)
         return tag_cut
     
     def tag_probe_condition(self, tag, probe):
@@ -325,9 +375,9 @@ class TriggerDijetTagAndProbe(TagAndProbeABC):
         
     def other_condition(self, tag, probe, jets):
         # alpha cut
-        if self.max_alpha: # alpha = 2*jet3/(jet1 + jet2) <= 1, so if max_alpha > 1, then alpha_cut does nothing
+        if self._max_alpha: # alpha = 2*jet3/(jet1 + jet2) <= 1, so if max_alpha > 1, then alpha_cut does nothing
             three_jets = jets[:, :3]
-            alpha_cut = (2 * three_jets[:, -1].pt < self.max_alpha * (tag.pt + probe.pt))
+            alpha_cut = (2 * three_jets[:, -1].pt < self._max_alpha * (tag.pt + probe.pt))
             alpha_cut = alpha_cut | (ak.num(jets) == 2)
         return alpha_cut
     
@@ -347,10 +397,11 @@ class NothingJetsFactory(object):
         return jets
     
 class JECBlock(SelectorABC): # TODO: think about better naming...
-    def __init__(self, weight_filelist, verbose=0):
+    def __init__(self, weight_filelist, name="", verbose=0):
         super().__init__()
         # build jet factory
         if weight_filelist is not None and len(weight_filelist) != 0:
+            assert len(name) and name != None, "must provide unique name"
             ext = extractor()
             ext.add_weight_sets(self.build_weightsdesc(weight_filelist))
             ext.finalize()
@@ -375,9 +426,10 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         else:
             self.name_map = None
             self.jet_factory = NothingJetsFactory()
-            
-        self.verbose = verbose
-        
+        self._name = name
+        self._verbose = verbose
+    def __str__(self):
+        return "{}: JEC".format(self._name)
     def build_weightsdesc(self, filelist, local_names=None, names=None):
         def has_whitespace(s):
             return any([c in s for c in string.whitespace])
@@ -396,7 +448,7 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         # pt and mass will be corrected
         if "mass" not in jets.fields: # placeholder for jet mass
             jets["mass"] = -np.inf * ak.ones_like(jets["pt"])
-            if self.verbose:
+            if self._verbose:
                 warnings.warn("No Jet mass, set all Jet mass to -inf")
                 
         # undo correction in NanoAOD
@@ -404,7 +456,7 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
             jets["pt_raw"] = (1 - jets["rawFactor"]) * jets["pt"]
             jets["mass_raw"] = (1 - jets["rawFactor"]) * jets["mass"]
         else:
-            if self.verbose > 0:
+            if self._verbose > 0:
                 warnings.warn("No rawFactor, treat as raw!")
             jets["pt_raw"] = jets["pt"]
             jets["mass_raw"] = jets["mass"]
@@ -413,54 +465,54 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         jets['rho'] = ak.broadcast_arrays(events.Rho.fixedGridRhoFastjetAll, jets.pt)[0]
         if "area" not in jets.fields: # placeholder for jet area
             jets["area"] = -np.inf * ak.ones_like(jets["pt"])
-            if self.verbose > 0:
+            if self._verbose > 0:
                 warnings.warn("No Jet area, set all Jet area to -inf")
         
         # additionally, gen pt is needed for JER (only for MC)
         try:
             jets['pt_gen'] = ak.values_astype(ak.fill_none(jets.matched_gen.pt, 0), np.float32)
         except:
-            if self.verbose > 0:
+            if self._verbose > 0:
                 warnings.warn("No GenJet information needed for JER/JERSF")
                 
         # apply JEC
         return self.jet_factory.build(jets, lazy_cache=events.caches[0])
     apply = apply_JEC
     
-    def __call__(self, jets, events):
+    def __call__(self, jets, events, nanocutflow=None):
         if self.status:
-            return self.apply(jets, events)
-        else:
-            return jets
+            jets = self.apply(jets, events)
+        if cutflow: 
+            # by definition, JEC doesn't change number of events
+            # here, we will count events with at least one jets instead, more useful for cutflow
+            cutflow[str(self)] += np.sum(ak.num(jets) > 0)
+        return jets
 
 ### delta R matching ###
 ### apply: (physics_objects, physics_objects) -> (physics_objects, physics_objects), e.g. (jets, jets) -> (jets, jets)
 class DeltaRMatching(SelectorABC):
     def __init__(self, max_deltaR):
         super().__init__()
-        self.max_deltaR = max_deltaR
-        
+        self._max_deltaR = max_deltaR
+    def __str__(self):
+        return "delta R < {}".format(self._max_deltaR) 
     def apply_deltaR_matching(self, first, second):
         assert len(first) == len(second), "length of two physics objects must equal, but get {} and {}".format(len(first), len(second))
         if len(first) == 0:
-            return first, second, 0
+            return first, second
         matched = ak.cartesian([first, second])
         delta_R_one = matched.slot0.delta_r(matched.slot1) # compute delta r
-        matched_mask = (delta_R_one < self.max_deltaR) # create mask
+        matched_mask = (delta_R_one < self._max_deltaR) # create mask
         matched = matched[matched_mask] # apply mask
         matched = matched[ak.num(matched) > 0] # select only non-empty entries
         matched_first = matched.slot0
         matched_second = matched.slot1
-        
-        # apply match mask to event to compute cutflow
-        event_matched_mask = map(lambda x: any(x), matched_mask) # make event-level mask
-        matched_count = ak.sum(event_matched_mask)
-        
-        return matched_first, matched_second, matched_count  
+        return matched_first, matched_second 
     apply = apply_deltaR_matching
     
-    def __call__(self, first, second):
+    def __call__(self, first, second, cutflow=None):
         if self.status:
-            return self.apply(first, second)
-        else:
-            return first, second, len(first)
+            first, second = self.apply(first, second)
+        if cutflow:
+            cutflow[str(self)] += np.sum(ak.num(first) > 0)
+        return first, second

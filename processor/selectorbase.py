@@ -3,12 +3,21 @@ from abc import ABCMeta, abstractmethod
 class SelectorABC(metaclass=ABCMeta):
     def __init__(self):
         self._on = True
-    def __call__(self, x):
+    def __str__(self):
+        return "unnamed selector"
+    def __call__(self, x, cutflow=None):
         if self._on:
             if len(x) == 0:
+                if cutflow != None:
+                    cutflow[str(self)] += len(x)
                 return x
-            return self.apply(x)
+            x = self.apply(x)
+            if cutflow != None:
+                cutflow[str(self)] += len(x)
+            return x
         else:
+            if cutflow != None:
+                cutflow[str(self) + " (off)"] += len(x)
             return x
     def on(self):
         self._on = True
