@@ -334,7 +334,8 @@ class OHProcessor(processor.ProcessorABC):
         off_correction_level_names = [_ for _ in correction_level_suffix_dict.keys() if _ in off_correction_level_in_use]
         on_correction_level_names = [_ for _ in correction_level_suffix_dict.keys() if _ in on_correction_level_in_use]
         if not self.mix_correction_level:
-            correction_level_names = zip(off_correction_level_names, on_correction_level_names)
+            correction_level_names = [(_, _) for _ in correction_level_suffix_dict.keys() \
+                                      if _ in off_correction_level_in_use and _ in on_correction_level_in_use]
         else:
             correction_level_names = itertools.product(off_correction_level_names, on_correction_level_names)
             
@@ -500,7 +501,7 @@ class OHProcessor(processor.ProcessorABC):
                         if self.verbose > 0:
                             warnings.warn("Fail to retrieve matched gen for online")
             end_time = time.time()
-            print("respone: ", end_time - start_time)
+            #print("respone: ", end_time - start_time)
             
             if "pt_percent_difference" in out:
                 sum_pt = matched_off_jets["pt_"+off_correction_level_name] + matched_on_jets["pt_"+on_correction_level_name]
@@ -591,7 +592,7 @@ class OHProcessor(processor.ProcessorABC):
                         if self.verbose > 0:
                             warnings.warn("Fail to retrieve matched gen for online")
             end_time = time.time()
-            print("comp: ", end_time - start_time)
+            #print("comp: ", end_time - start_time)
             
         # tag and probe histogram
         # NB: these are unmatched (before deltaR matching)
