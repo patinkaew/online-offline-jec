@@ -15,7 +15,7 @@ import warnings
 
 ### event-level ###
 ### apply: events -> events
-class LumiMaskBlock(SelectorABC):
+class LumiMaskSelector(SelectorABC):
     def __init__(self, lumi_json_path):
         self._lumimask = LumiMask(lumi_json_path) if lumi_json_path else None
     def __str__():
@@ -185,6 +185,7 @@ class EventWrappedPhysicsObjectSelector(SelectorABC):
         self._physics_object_name = physics_object_name
         self._physics_object_selector = physics_object_selector
         self._discard_empty = discard_empty
+        self.on() if self._physics_object_selector.status else self.off() # copy initial status
     def __str__(self):
         return str(self._physics_object_selector)
     def apply_event_wrapped_physics_object_selector(self, events):
@@ -199,18 +200,52 @@ class EventWrappedPhysicsObjectSelector(SelectorABC):
     
 ### jet-level ###
 ### apply: physics_objects -> physics_objects, e.g. jets -> jets
-# class MinPhysicsObject(SelectorABC):
-#     def __init__(self, min_physics_object=0, name=""):
-#         super().__init__()
-#         assert len(name) and name != None, "must provide unique name"
-#         self._min_physics_object = min_physics_object
-#         self._name = name
-#     def __str__(self):
-#         return "{} >= {}".format(self._name, self._min_physics_object)
-#     def apply_min_physics_object(self, physics_objects):
-#         return physics_objects[(ak.num(physics_objects) >= self._min_physics_object)] 
-#     apply = apply_min_physics_object
+class MinObject(SelectorABC):
+    def __init__(self, min_object=0, name=""):
+        super().__init__()
+        assert len(name) and name != None, "must provide unique name"
+        self._min_physics_object = min_physics_object
+        self._name = name
+    def __str__(self):
+        return "{} >= {}".format(self._name, self._min_physics_object)
+    def apply_min_object(self, physics_objects):
+        count = ak.num(physics_objects)
+        event_mask = (coutn >= self._object)
+        mask = ak.unflatten(np.repeat(event_mask, count), count)
+        return physics_objects[mask] 
+    apply = apply_min_object
 
+class ObjectInRange(SelectorABC):
+    def __init__(self, field, min_value=-np.inf, max_value=np.inf, mirror=False, name=""):
+        super.__init__()
+        if field:
+            assert len(name) and name != None, "must provide unique name"
+        self._field = field
+        self._min_value = min_value
+        self._max_value = max_value
+        self._mirror = mirror
+        self._name = name
+    def __str__(self):
+        return "select {} {} in {} - {}".format(self._name, self._field, self._min_value, self._max_value)
+    def apply_object_in_range(self, physics_object):
+        if not field:
+            return physics_object
+        mask = (physics_object[self._field] > self._min_value) & (physics_object[self._field] < self._max_value)
+        if self._mirror:
+            mask = mask | ((physics_object[self._field] < -self._min_value) & (physics_object[self._field] > -self._max_value))
+        return physics_object[mask]
+    apply = apply_object_in_range
+
+class ObjectInPtRange(ObjectInRange):
+    def __init__(self, min_pt=-np.inf, max_pt=np.inf, name=""):
+        super.__init__("pt", min_pt, max_pt, False, name)
+    apply_object_in_pt_range = ObjectInRange.apply
+    
+class ObjectInEtaRange(ObjectInRange):
+    def __init__(self, min_eta=-np.inf, max_eta=np.inf, mirror=False, name=""):
+        super.__init__("eta", min_eta, max_eta, mirror, name)
+    apply_object_in_eta_range = ObjectInRange.apply
+        
 class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied actually. For T&P, this shouldn't matter
     def __init__(self, max_leading, name=""):
         super().__init__()
@@ -276,6 +311,7 @@ class JetVetoMap(SelectorABC):
             self._jet_veto_map = partial(corr.evaluate, jet_veto_map_year, jet_veto_map_type)
         else:
             self._jet_veto_map = None
+            self.off()
         self._name = name
     def __str__(self):
         return "{}: jet veto map".format(self._name)
@@ -391,27 +427,36 @@ class NothingJetsFactory(object):
         # simply copying fields
         jets["pt_orig"] = jets["pt"]
         jets["mass_orig"] = jets["mass"]
-        jets["pt_jec"] = jets["pt_raw"]
-        jets["mass_jec"] = jets["mass_raw"]
+        jets["pt_jec"] = jets["pt"]
+        jets["mass_jec"] = jets["mass"]
         jets["jet_energy_correction"] = jets["pt_jec"] / jets["pt_raw"]
         return jets
     
 class JECBlock(SelectorABC): # TODO: think about better naming...
-    def __init__(self, weight_filelist, name="", verbose=0):
+    def __init__(self, weight_filelist, rho_name, name="", verbose=0):
         super().__init__()
         # build jet factory
         if weight_filelist is not None and len(weight_filelist) != 0:
             assert len(name) and name != None, "must provide unique name"
+            assert rho_name != None, "must specify rho to use"
             ext = extractor()
             ext.add_weight_sets(self.build_weightsdesc(weight_filelist))
             ext.finalize()
             evaluator = ext.make_evaluator()
 
             jec_stack_names = evaluator.keys()
-
             jec_inputs = {name: evaluator[name] for name in jec_stack_names}
             jec_stack = JECStack(jec_inputs)
-
+            
+            if verbose > 1:
+                print("="*50)
+                print("JEC stack for {}:".format(name))
+                print("Jet Energy Scale:")
+                print(jec_stack._jec)
+                print("Jet Energy Scale Uncertainty:")
+                print(jec_stack._junc)
+                print("="*50)
+            
             self.name_map = jec_stack.blank_name_map
             self.name_map['JetPt'] = 'pt'
             self.name_map['JetMass'] = 'mass'
@@ -426,10 +471,13 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         else:
             self.name_map = None
             self.jet_factory = NothingJetsFactory()
+        self._rho_name = rho_name
         self._name = name
         self._verbose = verbose
+        
     def __str__(self):
         return "{}: JEC".format(self._name)
+    
     def build_weightsdesc(self, filelist, local_names=None, names=None):
         def has_whitespace(s):
             return any([c in s for c in string.whitespace])
@@ -444,29 +492,34 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         assert len(local_names) == len(filelist)
         return [" ".join(_) for _ in zip(local_names, names, filelist)]
         
-    def apply_JEC(self, jets, events):
+    def apply_JEC(self, jets, events):            
         # pt and mass will be corrected
         if "mass" not in jets.fields: # placeholder for jet mass
             jets["mass"] = -np.inf * ak.ones_like(jets["pt"])
             if self._verbose:
                 warnings.warn("No Jet mass, set all Jet mass to -inf")
-                
+        correction_level_in_use = set()
         # undo correction in NanoAOD
         if "rawFactor" in jets.fields:
             jets["pt_raw"] = (1 - jets["rawFactor"]) * jets["pt"]
             jets["mass_raw"] = (1 - jets["rawFactor"]) * jets["mass"]
+            # indicate that raw and orig are different (for filling hist)
+            correction_level_in_use = {"raw", "orig"}
         else:
             if self._verbose > 0:
                 warnings.warn("No rawFactor, treat as raw!")
             jets["pt_raw"] = jets["pt"]
             jets["mass_raw"] = jets["mass"]
+            # indicate that raw and orig are same, and now refer as raw (for filling hist)
+            correction_level_in_use = {"raw"}
 
         # pt, eta, area, and rho are needed for JEC
-        jets['rho'] = ak.broadcast_arrays(events.Rho.fixedGridRhoFastjetAll, jets.pt)[0]
+        if self._rho_name:
+            jets['rho'] = ak.broadcast_arrays(events[tuple(self._rho_name.split("_"))], jets.pt)[0]
         if "area" not in jets.fields: # placeholder for jet area
-            jets["area"] = -np.inf * ak.ones_like(jets["pt"])
+            jets["area"] = 0.5 * ak.ones_like(jets["pt"])
             if self._verbose > 0:
-                warnings.warn("No Jet area, set all Jet area to -inf")
+                warnings.warn("No Jet area, set all Jet area to 0.5")
         
         # additionally, gen pt is needed for JER (only for MC)
         try:
@@ -476,17 +529,23 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
                 warnings.warn("No GenJet information needed for JER/JERSF")
                 
         # apply JEC
-        return self.jet_factory.build(jets, lazy_cache=events.caches[0])
+        if not isinstance(self.jet_factory, NothingJetsFactory):
+            correction_level_in_use.add("jec")
+        jets = self.jet_factory.build(jets, lazy_cache=events.caches[0])
+        return jets, correction_level_in_use
     apply = apply_JEC
     
-    def __call__(self, jets, events, nanocutflow=None):
+    def __call__(self, jets, events, cutflow=None):
         if self.status:
-            jets = self.apply(jets, events)
+            jets, correction_level_in_use = self.apply(jets, events)
+        else:
+            jets["pt_orig"] = jets["pt"]
+            correction_level_in_use = {"orig"}
         if cutflow: 
             # by definition, JEC doesn't change number of events
             # here, we will count events with at least one jets instead, more useful for cutflow
             cutflow[str(self)] += np.sum(ak.num(jets) > 0)
-        return jets
+        return jets, correction_level_in_use
 
 ### delta R matching ###
 ### apply: (physics_objects, physics_objects) -> (physics_objects, physics_objects), e.g. (jets, jets) -> (jets, jets)
@@ -504,7 +563,7 @@ class DeltaRMatching(SelectorABC):
         delta_R_one = matched.slot0.delta_r(matched.slot1) # compute delta r
         matched_mask = (delta_R_one < self._max_deltaR) # create mask
         matched = matched[matched_mask] # apply mask
-        matched = matched[ak.num(matched) > 0] # select only non-empty entries
+        #matched = matched[ak.num(matched) > 0] # select only non-empty entries
         matched_first = matched.slot0
         matched_second = matched.slot1
         return matched_first, matched_second 
