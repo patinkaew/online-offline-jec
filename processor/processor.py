@@ -630,7 +630,7 @@ class OHProcessor(processor.ProcessorABC):
             for on_correction_level_name in on_correction_level_names:
                 out["jet_pt"].fill(dataset=dataset, 
                                    jet_type=self.on_jet_label+"_"+correction_level_suffix_dict[on_correction_level_name], 
-                                   jet_pt=ak.flatten(matched_off_jets["pt_"+on_correction_level_name]),
+                                   jet_pt=ak.flatten(matched_on_jets["pt_"+on_correction_level_name]),
                                    weight=weight)
             # if (not self.is_data) and self.fill_gen: let's deal with this later
 
