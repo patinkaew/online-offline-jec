@@ -436,7 +436,7 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
     def __init__(self, weight_filelist, rho_name, name="", verbose=0):
         super().__init__()
         # build jet factory
-        if weight_filelist is not None and len(weight_filelist) != 0:
+        if weight_filelist != None and len(weight_filelist) != 0:
             assert len(name) and name != None, "must provide unique name"
             assert rho_name != None, "must specify rho to use"
             ext = extractor()
@@ -471,6 +471,8 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         else:
             self.name_map = None
             self.jet_factory = NothingJetsFactory()
+            if weight_filelist == None: # if weight_filelist = [], then it is on
+                self.off()
         self._rho_name = rho_name
         self._name = name
         self._verbose = verbose
@@ -544,7 +546,10 @@ class JECBlock(SelectorABC): # TODO: think about better naming...
         if cutflow: 
             # by definition, JEC doesn't change number of events
             # here, we will count events with at least one jets instead, more useful for cutflow
-            cutflow[str(self)] += np.sum(ak.num(jets) > 0)
+            if self.status:
+                cutflow[str(self)] += np.sum(ak.num(jets) > 0)
+            else:
+                cutflow[str(self)+" (off)"] += np.sum(ak.num(jets) > 0)
         return jets, correction_level_in_use
 
 ### delta R matching ###
@@ -573,5 +578,8 @@ class DeltaRMatching(SelectorABC):
         if self.status:
             first, second = self.apply(first, second)
         if cutflow:
-            cutflow[str(self)] += np.sum(ak.num(first) > 0)
+            if self.status:
+                cutflow[str(self)] += np.sum(ak.num(first) > 0)
+            else:
+                cutflow[str(self)+" (off)"] += np.sum(ak.num(first) > 0)
         return first, second
