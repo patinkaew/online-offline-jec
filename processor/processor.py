@@ -413,8 +413,8 @@ class OHProcessor(processor.ProcessorABC):
         
         # 1D histograms (technically, these are reducible from above histograms)
         if "jet_pt" in self.hist_to_fill:
-            corrected_jet_types = [self.off_jet_label+correction_level_suffix_dict[_] for _ in off_correction_level_names]
-            corrected_jet_types += [self.on_jet_label+correction_level_suffix_dict[_] for _ in on_correction_level_names]
+            corrected_jet_types = [self.off_jet_label+"_"+correction_level_suffix_dict[_] for _ in off_correction_level_names]
+            corrected_jet_types += [self.on_jet_label+"_"+correction_level_suffix_dict[_] for _ in on_correction_level_names]
             corrected_jet_type_axis = hist.axis.StrCategory(corrected_jet_types, 
                                                             name="jet_type", label="Types of Jet", growth=False)
             h_jet_pt = hist.Hist(dataset_axis, corrected_jet_type_axis, jet_pt_axis, storage=self.storage)
@@ -444,7 +444,7 @@ class OHProcessor(processor.ProcessorABC):
         
         # get event weight
         if self.is_data:
-            weights = None
+            weight = None
         else:
             weight = ak.flatten(ak.broadcast_arrays(events.genWeight, matched_off_jets.pt)[0])
         
@@ -597,30 +597,38 @@ class OHProcessor(processor.ProcessorABC):
         # NB: these are unmatched (before deltaR matching)
         if "tag_and_probe" in out:
             if self.off_jet_tagprobe.status:
+                if self.is_data:
+                    off_tp_weight = None
+                else:
+                    off_tp_weight = ak.flatten(ak.broadcast_arrays(events.genWeight, off_jets.pt)[0])
                 out["tag_and_probe"].fill(dataset=dataset, jet_type=self.off_jet_label, \
                                           jet_pt=ak.flatten(off_jets_tag.pt), \
                                           jet_eta=ak.flatten(off_jets_tag.eta), \
                                           jet_phi=ak.flatten(off_jets_tag.phi), \
                                           tp_diff_ratio=ak.flatten((off_jets.pt - off_jets_tag.pt) / off_jets_tag.pt),
-                                          weight=ak.flatten(ak.broadcast_arrays(events.genWeight, off_jets.pt)[0]))
+                                          weight=off_tp_weight)
             if self.on_jet_tagprobe.status:
+                if self.is_data:
+                    on_tp_weight = None
+                else:
+                    on_tp_weight = ak.flatten(ak.broadcast_arrays(events.genWeight, on_jets.pt)[0])
                 out["tag_and_probe"].fill(dataset=dataset, jet_type=self.on_jet_label, \
                                           jet_pt=ak.flatten(on_jets_tag.pt), \
                                           jet_eta=ak.flatten(on_jets_tag.eta), \
                                           jet_phi=ak.flatten(on_jets_tag.phi), \
                                           tp_diff_ratio=ak.flatten((on_jets.pt - on_jets_tag.pt) / on_jets_tag.pt),
-                                          weight=ak.flatten(ak.broadcast_arrays(events.genWeight, on_jets.pt)[0]))
+                                          weight=on_tp_weight)
         
         # filling 1D histograms
         if "jet_pt" in out:
             for off_correction_level_name in off_correction_level_names:
                 out["jet_pt"].fill(dataset=dataset, 
-                                   jet_type=self.off_jet_label+correction_level_suffix_dict[off_correction_level_name], 
+                                   jet_type=self.off_jet_label+"_"+correction_level_suffix_dict[off_correction_level_name], 
                                    jet_pt=ak.flatten(matched_off_jets["pt_"+off_correction_level_name]),
                                    weight=weight)
             for on_correction_level_name in on_correction_level_names:
                 out["jet_pt"].fill(dataset=dataset, 
-                                   jet_type=self.on_jet_label+correction_level_suffix_dict[on_correction_level_name], 
+                                   jet_type=self.on_jet_label+"_"+correction_level_suffix_dict[on_correction_level_name], 
                                    jet_pt=ak.flatten(matched_off_jets["pt_"+on_correction_level_name]),
                                    weight=weight)
             # if (not self.is_data) and self.fill_gen: let's deal with this later
@@ -648,6 +656,8 @@ class OHProcessor(processor.ProcessorABC):
         
     def postprocess(self, accumulator):
         # compute integrated luminosity
+        if not self.is_data:
+            return accumulator
         if self.compute_processed_lumi:
             lumidata = LumiData(self.lumi_csv_path)
             for dataset in accumulator["processed_lumi"]:
