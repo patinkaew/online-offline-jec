@@ -26,7 +26,7 @@ class OHProcessor(processor.ProcessorABC):
                  
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
-                 min_off_jet=0, min_on_jet=0, # event-level, select events with at least n jets
+                 min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
                  MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
                  max_MET_sumET=None, min_MET=45, 
                  trigger_min_pt=0, # event-level, trigger cut
@@ -45,17 +45,17 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
                  
                  max_deltaR=0.2, # for deltaR matching
-                 max_leading_jet=None, # select up to n leading jets to fill histograms
+                 max_leading_jet=2, # select up to n leading jets to fill histograms
                  
                  # histograms
                  is_data=True, # data or simulation
-                 storage=None, # storage type for Hist histograms
+                 #storage=hist.storage.Weight(), # storage type for Hist histograms
                  mix_correction_level=False,
                  pt_binning="log",
                  eta_binning="coarse",
-                 phi_binning=None,
+                 # phi_binning=None,
                  fill_gen=False, # (only MC)
-                 hist_to_fill="comparison",
+                 hist_to_fill="all",
                  
                  verbose=0):
         
@@ -265,6 +265,9 @@ class OHProcessor(processor.ProcessorABC):
         events = self.max_pv_z(events, cutflow)
         events = self.max_pv_rxy(events, cutflow)
         
+        # Flag filters
+        events = self.flag_filters(events, cutflow)
+        
         # MET cuts
         events = self.max_MET(events, cutflow)
         events = self.max_MET_sumET(events, cutflow)
@@ -318,7 +321,7 @@ class OHProcessor(processor.ProcessorABC):
         assert len(matched_on_jets) == len(matched_off_jets), "online and offline must have the same length for histogram filling, but get online: {} and offline: {}".format(len(matched_on_jets), len(matched_off_jets))
         
         # out accumulator
-        out = {"cutflow": cutflow}
+        out = {"cutflow": {dataset: cutflow}} # {dataset: cutflow}
         # save luminosity
         if self.is_data and self.save_processed_lumi:
             out["processed_lumi"] = {dataset: {"lumi_list": lumi_list}}
