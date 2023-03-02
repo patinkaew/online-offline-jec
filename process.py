@@ -332,6 +332,7 @@ if __name__ == "__main__":
                 print("="*50)
                 print("Begin Processing")
                 print("(Save file: {})".format(args.out_file))
+                print(args.out_file)
                 mkdir_if_not_exists(os.path.dirname(args.out_file))
                 print("="*50)
                 start_time = datetime.datetime.now()
