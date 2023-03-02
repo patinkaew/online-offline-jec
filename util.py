@@ -3,6 +3,7 @@ import shutil
 import string
 import re
 import json
+import inspect
 
 import numpy as np
 import uproot
@@ -50,6 +51,20 @@ def print_dict_json(dictionary, title):
     print(title)
     print(json.dumps(dictionary, indent = 4, cls=NpEncoder))
     print("="*50)
+
+def create_default_config_file(processor_class, config_file):
+    assert not os.path.exists(config_file), "config file: {} already exist".format(config_file)
+    with open(config_file, "w") as f:
+        f.write("[Processor]\n")
+        for parameter in inspect.signature(processor_class).parameters.values():
+            default = parameter.default if parameter.default != inspect._empty else ""
+            f.write("{} = {}\n".format(parameter.name, default))
+        
+        f.write("\n[Runner]\n")
+        f.write("executor = iterative\n")
+        f.write("num_workers = 1\n")
+        f.write("chunksize = 100_000\n")
+        f.write("maxchunks = None")
     
 # functions for manipulating trigger flags
 # def find_available_trigger_flags(events, flag_prefix="PFJet"):
