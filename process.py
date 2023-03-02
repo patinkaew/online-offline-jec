@@ -283,6 +283,7 @@ if __name__ == "__main__":
         #xrootdstr = "root://cmsxrootd.fnal.gov//"
         #xrootdstr = "root://xcache/" # for coffea.casa
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
+        print(fileset)
         for dataset in fileset:
             fileset[dataset] = [xrootdstr + filename for filename in fileset[dataset]]
         print(fileset)
