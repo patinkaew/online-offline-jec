@@ -284,11 +284,9 @@ if __name__ == "__main__":
         #xrootdstr = "root://cmsxrootd.fnal.gov//"
         #xrootdstr = "root://xcache/" # for coffea.casa
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
-        print("test file: ", fileset["JetMET"][0])
         for dataset in fileset:
             # remove /eos/cms and prepend xrootd redirector
             fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
-        print("test file: ", fileset["JetMET"][0])
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
@@ -313,7 +311,7 @@ if __name__ == "__main__":
                 
                 # define runner
                 runner = processor.Runner(
-                                    executor=processor.DaskExecutor(client=client, retries=6, xrootdtimeout=60),
+                                    executor=processor.DaskExecutor(client=client, retries=6),
                                     schema=JMENanoAODSchema,
                                     # size of each chunk to process (a unit of work)
                                     # approximately, grow linearly with memory usage
@@ -325,6 +323,7 @@ if __name__ == "__main__":
                                     maxchunks=10,
                                     # other arguments
                                     skipbadfiles=True,
+                                    xrootdtimeout=60
                                     )
 
                 # processing
