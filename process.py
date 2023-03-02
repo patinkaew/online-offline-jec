@@ -283,10 +283,11 @@ if __name__ == "__main__":
         #xrootdstr = "root://cmsxrootd.fnal.gov//"
         #xrootdstr = "root://xcache/" # for coffea.casa
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
-        print(fileset)
+        print("test file: ", fileset["JetMET"][0])
         for dataset in fileset:
-            fileset[dataset] = [xrootdstr + filename for filename in fileset[dataset]]
-        print(fileset)
+            # remove /eos/cms and prepend xrootd redirector
+            fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
+        print("test file: ", fileset["JetMET"][0])
         exit()
         
         # with defines the scope of cluster, client
