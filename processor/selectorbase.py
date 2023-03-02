@@ -50,11 +50,11 @@ class SelectorList():
     def status(self):
         return [selector.status() for selector in self._selector_list]
     
-    def apply(self, collection):
+    def apply(self, x):
         for selector in self._selector_list:
             x = selector.apply(x)
         return x
-    def __call__(self, x):
+    def __call__(self, x, cutflow=None):
         for selector in self._selector_list:
-            x = selector(x)
+            x = selector(x, cutflow)
         return x
