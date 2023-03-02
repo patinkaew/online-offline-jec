@@ -299,7 +299,7 @@ if __name__ == "__main__":
             with Client(cluster) as client:
                 print("test file: ", fileset["JetMET"][0])
                 uproot.open(fileset["JetMET"][0])
-                print("done")
+                #print("done")
 #                 with open("test.txt", "w") as f:
 #                     f.write("done")
                 
