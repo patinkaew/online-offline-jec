@@ -290,15 +290,16 @@ if __name__ == "__main__":
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
-        print("Iniatiating CernCluster")
+        print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
             cluster.adapt(minimum=1, maximum=1)
             cluster.scale(8)
-            print("Iniatiating Client")
+            print("Initiating Client")
             with Client(cluster) as client:
                 print("Upload corrections")
                 shutil.make_archive("corrections", "zip", base_dir="corrections")
                 client.upload_file("corrections.zip")
+                
                 print("Upload processor")
                 shutil.make_archive("processor", "zip", base_dir="processor")
                 client.upload_file("processor.zip")
