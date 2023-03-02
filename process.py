@@ -257,7 +257,7 @@ if __name__ == "__main__":
         env_extra = [
                 'export XRD_RUNFORKHANDLER=1',
                 'export X509_USER_PROXY={}'.format(proxy_path),
-                'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),
+                'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
 
         port_number = configs["Runner"].getint("port_number", 9997)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
                                "scheduler_options": {"port": port_number, # port number to communicate with cluster
                                                      "host": socket.gethostname()
                                                     },
-                               "job_extra": {"MY.JobFlavour": "'espresso'",
+                               "job_extra": {"MY.JobFlavour": '"espresso"',
                                             },
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
@@ -284,6 +284,7 @@ if __name__ == "__main__":
         #xrootdstr = "root://cmsxrootd.fnal.gov//"
         #xrootdstr = "root://xcache/" # for coffea.casa
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
+        print(args.out_file)
         for dataset in fileset:
             # remove /eos/cms and prepend xrootd redirector
             fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
@@ -292,7 +293,7 @@ if __name__ == "__main__":
         # this ensures that cluster.close() and client.close() are called at the end
         print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
-            cluster.adapt(minimum=1, maximum=1)
+            cluster.adapt(minimum=2, maximum=50)
             cluster.scale(8)
             print("Initiating Client")
             with Client(cluster) as client:
@@ -323,7 +324,7 @@ if __name__ == "__main__":
                                     # set this when testing
                                     maxchunks=10,
                                     # other arguments
-                                    skipbadfiles=True,
+                                    #skipbadfiles=True,
                                     xrootdtimeout=60
                                     )
 
