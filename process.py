@@ -294,7 +294,7 @@ if __name__ == "__main__":
         # this ensures that cluster.close() and client.close() are called at the end
         print("Iniatiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
-            cluster.adapt(minimum=2, maximum=100)
+            cluster.adapt(minimum=1, maximum=1)
             cluster.scale(8)
             print("Iniatiating Client")
             with Client(cluster) as client:
