@@ -285,6 +285,8 @@ if __name__ == "__main__":
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
         for dataset in fileset:
             fileset[dataset] = [xrootdstr + filename for filename in fileset[dataset]]
+        print(fileset)
+        exit()
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
