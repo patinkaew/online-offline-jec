@@ -294,8 +294,9 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Iniatiating Client")
             with Client(cluster) as client:
+                print("test file: ", fileset["JetMET"][0])
                 uproot.open(fileset["JetMET"][0])
-                with open("test.txt", "w") as f
+                with open("test.txt", "w") as f:
                     f.write("done")
                 
                 # define runner
