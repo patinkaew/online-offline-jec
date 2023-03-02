@@ -230,6 +230,7 @@ if __name__ == "__main__":
         import socket
         from dask.distributed import Client 
         from dask_lxplus import CernCluster
+        import shutil
     
 #     job flavor
 #     espresso     = 20 minutes
@@ -297,51 +298,58 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Iniatiating Client")
             with Client(cluster) as client:
-                print("test file: ", fileset["JetMET"][0])
-                uproot.open(fileset["JetMET"][0])
+                print("Upload corrections")
+                shutil.make_archive("corrections", "zip", base_dir="corrections")
+                client.upload_file("corrections.zip")
+                print("Upload processor")
+                shutil.make_archive("processor", "zip", base_dir="processor")
+                client.upload_file("processor.zip")
+                
+                #print("test file: ", fileset["JetMET"][0])
+                #uproot.open(fileset["JetMET"][0])
                 #print("done")
 #                 with open("test.txt", "w") as f:
 #                     f.write("done")
                 
                 # define runner
-#                 runner = processor.Runner(
-#                                     executor=processor.DaskExecutor(client=client, retries=6, xrootdtimeout=60),
-#                                     schema=JMENanoAODSchema,
-#                                     # size of each chunk to process (a unit of work)
-#                                     # approximately, grow linearly with memory usage
-#                                     # chunksize=100000,
+                runner = processor.Runner(
+                                    executor=processor.DaskExecutor(client=client, retries=6, xrootdtimeout=60),
+                                    schema=JMENanoAODSchema,
+                                    # size of each chunk to process (a unit of work)
+                                    # approximately, grow linearly with memory usage
+                                    # chunksize=100000,
 
-#                                     # number of maximum chunks to process in each dataset, default to whole dataset.
-#                                     # do not set this when running the full analysis.
-#                                     # set this when testing
-#                                     maxchunks=10,
-#                                     # other arguments
-#                                     skipbadfiles=True,
-#                                     )
+                                    # number of maximum chunks to process in each dataset, default to whole dataset.
+                                    # do not set this when running the full analysis.
+                                    # set this when testing
+                                    maxchunks=10,
+                                    # other arguments
+                                    skipbadfiles=True,
+                                    )
 
-#                 # processing
-#                 print("="*50)
-#                 print("Begin Processing")
-#                 print("(Save file: {})".format(args.out_file))
-#                 mkdir_if_not_exists(os.path.dirname(args.out_file))
-#                 print("="*50)
-#                 start_time = datetime.datetime.now()
-#                 out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
-#                 end_time = datetime.datetime.now()
-#                 elapsed_time = end_time-start_time
-#                 print("="*50)
+                # processing
+                print("="*50)
+                print("Begin Processing")
+                print("(Save file: {})".format(args.out_file))
+                mkdir_if_not_exists(os.path.dirname(args.out_file))
+                print("="*50)
+                start_time = datetime.datetime.now()
+                out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
+                end_time = datetime.datetime.now()
+                elapsed_time = end_time-start_time
+                print("="*50)
 
-#                 print("Finish Processing")
-#                 print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
-#                 print_dict_json(out.get("cutflow", dict()), title="Cutflow")
+                print("Finish Processing")
+                print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
+                print_dict_json(out.get("cutflow", dict()), title="Cutflow")
 
-#                 # post-processing output
-#                 out["arguments"] = vars(args)
-#                 out["configurations"] = configs._sections
-#                 out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
-#                 out["process_time"] = elapsed_time
-#                 print("="*50)
+                # post-processing output
+                out["arguments"] = vars(args)
+                out["configurations"] = configs._sections
+                out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
+                out["process_time"] = elapsed_time
+                print("="*50)
 
-#                 print("Save to Output file: {}".format(args.out_file))
-#                 cutil.save(out, args.out_file)
-#                 print("All Complete!")
+                print("Save to Output file: {}".format(args.out_file))
+                cutil.save(out, args.out_file)
+                print("All Complete!")
