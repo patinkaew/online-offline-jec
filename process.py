@@ -288,7 +288,6 @@ if __name__ == "__main__":
             # remove /eos/cms and prepend xrootd redirector
             fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
         print("test file: ", fileset["JetMET"][0])
-        exit()
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
