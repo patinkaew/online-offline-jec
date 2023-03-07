@@ -15,6 +15,14 @@ import warnings
 
 import time
 
+class SimpleProcessor(processor.ProcessorABC):
+    def __init__(self):
+        pass
+    def process(self, events):
+        return {"nevents":len(events)}
+    def postprocess(self, accumulator):
+        return accumulator
+
 class OHProcessor(processor.ProcessorABC):
     def __init__(self, 
                  off_jet_name, off_jet_label=None, # offline jet
