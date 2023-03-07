@@ -320,12 +320,6 @@ if __name__ == "__main__":
                 for file in glob.glob("processor/*.py"):
                     client.upload_file(file)
                 
-                #print("test file: ", fileset["JetMET"][0])
-                #uproot.open(fileset["JetMET"][0])
-                #print("done")
-#                 with open("test.txt", "w") as f:
-#                     f.write("done")
-                
                 # define runner
                 runner = processor.Runner(
                                     executor=processor.DaskExecutor(client=client, retries=6),
