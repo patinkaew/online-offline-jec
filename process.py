@@ -270,10 +270,7 @@ if __name__ == "__main__":
                     transfer_input_files += processor_config[config]
                 else:
                     raise ValueError("Processor config {} was recognized as path, but value {} is neither str or list".format(config, processor[config]))
-        print(transfer_input_files)
         transfer_input_files = ",".join(transfer_input_files)
-        print(transfer_input_files)
-        exit()
 
         port_number = configs["Runner"].getint("port_number", 8786)
         cern_cluster_config = {"cores": 1,
@@ -290,6 +287,7 @@ if __name__ == "__main__":
                                "job_extra": {"MY.JobFlavour": '"longlunch"',
                                             },
                                "batch_name": configs["Runner"].get("batch_name", "dask-worker"),
+                               # only executables are transfer, heres are corrections
                                "transfer_input_files": transfer_input_files,
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
