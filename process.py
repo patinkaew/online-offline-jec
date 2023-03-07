@@ -14,7 +14,7 @@ from coffea import util as cutil
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
 from processor.processor import OHProcessor, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
-from util import *
+import util
 
 import warnings
 import time
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     parser.add_argument("--on_jet_tag_min_pt", type=float, required=False)
     
     args = parser.parse_args()
-    print_dict_json(vars(args), title="Arguments")
+    util.print_dict_json(vars(args), title="Arguments")
     
     configs = configparser.ConfigParser()
     configs.read(args.config_file)
@@ -101,7 +101,7 @@ if __name__ == "__main__":
     # change to list for printing
     configs._sections["Processor"]["off_jet_weight_filelist"] = eval(configs._sections["Processor"]["off_jet_weight_filelist"])
     configs._sections["Processor"]["on_jet_weight_filelist"] = eval(configs._sections["Processor"]["on_jet_weight_filelist"])
-    print_dict_json(configs._sections, title="Configurations")
+    util.print_dict_json(configs._sections, title="Configurations")
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         print("="*50)
         print("Begin Processing")
         print("(Save file: {})".format(args.out_file))
-        mkdir_if_not_exists(os.path.dirname(args.out_file))
+        util.mkdir_if_not_exists(os.path.dirname(args.out_file))
         print("="*50)
         start_time = datetime.datetime.now()
         out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
@@ -341,7 +341,7 @@ if __name__ == "__main__":
                 print("="*50)
                 print("Begin Processing")
                 print("(Save file: {})".format(args.out_file))
-                mkdir_if_not_exists(os.path.dirname(args.out_file))
+                util.mkdir_if_not_exists(os.path.dirname(args.out_file))
                 print("="*50)
                 start_time = datetime.datetime.now()
                 out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
