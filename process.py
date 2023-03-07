@@ -312,9 +312,9 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Initiating Client")
             with Client(cluster) as client:
-                print("Upload corrections")
-                shutil.make_archive("corrections", "zip", base_dir="corrections")
-                client.upload_file("corrections.zip")
+                #print("Upload corrections")
+                #shutil.make_archive("corrections", "zip", base_dir="corrections")
+                #client.upload_file("corrections.zip")
                 
                 print("Upload processor")
                 shutil.make_archive("processor", "zip", base_dir="processor")
@@ -350,7 +350,7 @@ if __name__ == "__main__":
                 mkdir_if_not_exists(os.path.dirname(args.out_file))
                 print("="*50)
                 start_time = datetime.datetime.now()
-                out = runner(fileset, treename="Events", processor_instance=SimpleProcessor())#OHProcessor(**processor_config))
+                out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
                 end_time = datetime.datetime.now()
                 elapsed_time = end_time-start_time
                 print("="*50)
