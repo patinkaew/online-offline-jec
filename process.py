@@ -265,6 +265,7 @@ if __name__ == "__main__":
         for config in path_proccessor_configs:
             if processor_config[config] != None:
                 transfer_input_files += list(processor_config[config])
+        print(transfer_input_files)
         transfer_input_files = ",".join(transfer_input_files)
         print(transfer_input_files)
         exit()
