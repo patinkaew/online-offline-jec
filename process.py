@@ -260,17 +260,17 @@ if __name__ == "__main__":
                 'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
         
-        transfer_input_files = list()
+        transfer_input_filelist = list()
         path_proccessor_configs = [_ for _ in processor_config.keys() if _.endswith("path") or _.endswith("filelist")]
         for config in path_proccessor_configs:
             if processor_config[config] != None:
                 if isinstance(processor_config[config], str):
-                    transfer_input_files += [processor_config[config]]
+                    transfer_input_filelist += [processor_config[config]]
                 elif isinstance(processor_config[config], list):
-                    transfer_input_files += processor_config[config]
+                    transfer_input_filelist += processor_config[config]
                 else:
                     raise ValueError("Processor config {} was recognized as path, but value {} is neither str or list".format(config, processor[config]))
-        transfer_input_files = ",".join(transfer_input_files)
+        transfer_input_files = ",".join(transfer_input_filelist)
 
         port_number = configs["Runner"].getint("port_number", 8786)
         cern_cluster_config = {"cores": 1,
@@ -312,13 +312,13 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Initiating Client")
             with Client(cluster) as client:
-                #print("Upload corrections")
-                #shutil.make_archive("corrections", "zip", base_dir="corrections")
-                #client.upload_file("corrections.zip")
+                print("Uploading corrections")
+                for file in transfer_input_filelist:
+                    client.upload_file(file)
                 
-                print("Upload processor")
-                shutil.make_archive("processor", "zip", base_dir="processor")
-                client.upload_file("processor.zip")
+                print("Uploading processor")
+                for file in glob.glob("processor/*.py"):
+                    client.upload_file(file)
                 
                 #print("test file: ", fileset["JetMET"][0])
                 #uproot.open(fileset["JetMET"][0])
@@ -329,7 +329,7 @@ if __name__ == "__main__":
                 # define runner
                 runner = processor.Runner(
                                     executor=processor.DaskExecutor(client=client, retries=6),
-                                    schema=JMENanoAODSchema,
+                                    schema=ScoutingJMENanoAODSchema,
                                     # size of each chunk to process (a unit of work)
                                     # approximately, grow linearly with memory usage
                                     # chunksize=100000,
@@ -337,7 +337,7 @@ if __name__ == "__main__":
                                     # number of maximum chunks to process in each dataset, default to whole dataset.
                                     # do not set this when running the full analysis.
                                     # set this when testing
-                                    maxchunks=10,
+                                    maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
                                     # other arguments
                                     #skipbadfiles=True,
                                     xrootdtimeout=60
