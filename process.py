@@ -264,7 +264,12 @@ if __name__ == "__main__":
         path_proccessor_configs = [_ for _ in processor_config.keys() if _.endswith("path") or _.endswith("filelist")]
         for config in path_proccessor_configs:
             if processor_config[config] != None:
-                transfer_input_files += list(processor_config[config])
+                if isinstance(processor_config[config], str):
+                    transfer_input_files += [processor_config[config]]
+                elif isinstance(processor_config[config], list):
+                    transfer_input_files += processor_config[config]
+                else:
+                    raise ValueError("Processor config {} was recognized as path, but value {} is neither str or list".format(config, processor[config]))
         print(transfer_input_files)
         transfer_input_files = ",".join(transfer_input_files)
         print(transfer_input_files)
