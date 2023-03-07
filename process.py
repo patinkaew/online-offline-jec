@@ -241,7 +241,7 @@ if __name__ == "__main__":
 #     testmatch    = 3 days
 #     nextweek     = 1 week
     
-        print("current interpreter: {}".format(sys.executable))
+        print("Current interpreter: {}".format(sys.executable))
     
         # configure environment for grid authentication
         proxy_path = configs["Runner"].get("proxy_path", "/afs/cern.ch/user/p/pinkaew/private/gridproxy.pem")
@@ -284,7 +284,6 @@ if __name__ == "__main__":
         #xrootdstr = "root://cmsxrootd.fnal.gov//"
         #xrootdstr = "root://xcache/" # for coffea.casa
         #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
-        print(args.out_file)
         for dataset in fileset:
             # remove /eos/cms and prepend xrootd redirector
             fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
