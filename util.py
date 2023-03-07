@@ -11,7 +11,7 @@ import awkward as ak
 import hist
 
 def mkdir_if_not_exists(path):
-    if not os.path.exists(path):
+    if (len(path) > 0) and (not os.path.exists(path)):
         os.makedirs(path)
         
 def compress_folder(folder_path, out_filename, filetype="zip"):
