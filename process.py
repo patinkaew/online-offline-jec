@@ -259,6 +259,15 @@ if __name__ == "__main__":
                 'export X509_USER_PROXY={}'.format(proxy_path),
                 'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
+        
+        transfer_input_files = list()
+        path_proccessor_configs = [_ for _ in processor_config.keys() if _.endswith("path") or _.endswith("filelist")]
+        for config in path_proccessor_configs:
+            if processor_config[config] != None:
+                transfer_input_files += list(processor_config[config])
+        transfer_input_files = ",".join(transfer_input_files)
+        print(transfer_input_files)
+        exit()
 
         port_number = configs["Runner"].getint("port_number", 8786)
         cern_cluster_config = {"cores": 1,
@@ -275,6 +284,7 @@ if __name__ == "__main__":
                                "job_extra": {"MY.JobFlavour": '"longlunch"',
                                             },
                                "batch_name": configs["Runner"].get("batch_name", "dask-worker"),
+                               "transfer_input_files": transfer_input_files,
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
 
@@ -297,13 +307,13 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Initiating Client")
             with Client(cluster) as client:
-#                 print("Upload corrections")
-#                 shutil.make_archive("corrections", "zip", base_dir="corrections")
-#                 client.upload_file("corrections.zip")
+                print("Upload corrections")
+                shutil.make_archive("corrections", "zip", base_dir="corrections")
+                client.upload_file("corrections.zip")
                 
-#                 print("Upload processor")
-#                 shutil.make_archive("processor", "zip", base_dir="processor")
-#                 client.upload_file("processor.zip")
+                print("Upload processor")
+                shutil.make_archive("processor", "zip", base_dir="processor")
+                client.upload_file("processor.zip")
                 
                 #print("test file: ", fileset["JetMET"][0])
                 #uproot.open(fileset["JetMET"][0])
