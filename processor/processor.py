@@ -19,6 +19,7 @@ class SimpleProcessor(processor.ProcessorABC):
     def __init__(self):
         pass
     def process(self, events):
+        print("nevents: ", len(events))
         return {"nevents":len(events)}
     def postprocess(self, accumulator):
         return accumulator
