@@ -260,10 +260,10 @@ if __name__ == "__main__":
                 'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
 
-        port_number = configs["Runner"].getint("port_number", 9997)
+        port_number = configs["Runner"].getint("port_number", 8786)
         cern_cluster_config = {"cores": 1,
                                "memory": "2000MB",
-                               "disk": "2000MB",
+                               "disk": "10GB",
                                "death_timeout":"60",
                                "lcg": True,
                                "nanny": False,
@@ -274,6 +274,7 @@ if __name__ == "__main__":
                                                     },
                                "job_extra": {"MY.JobFlavour": '"longlunch"',
                                             },
+                               "batch_name": configs["Runner"].get("batch_name", "dask-worker"),
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
 
