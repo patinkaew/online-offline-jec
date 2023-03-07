@@ -284,11 +284,12 @@ if __name__ == "__main__":
                                "scheduler_options": {"port": port_number, # port number to communicate with cluster
                                                      "host": socket.gethostname()
                                                     },
-                               "job_extra": {"MY.JobFlavour": '"longlunch"',
+                               "job_extra": {
+                                   "MY.JobFlavour": '"longlunch"',
+                                   # only executables are transfer, heres are corrections
+                                   "transfer_input_files": transfer_input_files
                                             },
                                "batch_name": configs["Runner"].get("batch_name", "dask-worker"),
-                               # only executables are transfer, heres are corrections
-                               "transfer_input_files": transfer_input_files,
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
 
