@@ -12,7 +12,7 @@ from coffea import processor
 from coffea import util as cutil
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
-from processor.processor import OHProcessor
+from processor.processor import OHProcessor, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
 from util import *
 
@@ -105,10 +105,10 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
-#     max_file = 1 # for testing
-#     if max_file is not None:
-#         for dataset in fileset:
-#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
+    max_file = 1 # for testing
+    if max_file is not None:
+        for dataset in fileset:
+            fileset[dataset] = sorted(fileset[dataset])[:max_file]
     print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
                                "scheduler_options": {"port": port_number, # port number to communicate with cluster
                                                      "host": socket.gethostname()
                                                     },
-                               "job_extra": {"MY.JobFlavour": '"espresso"',
+                               "job_extra": {"MY.JobFlavour": '"longlunch"',
                                             },
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
@@ -297,13 +297,13 @@ if __name__ == "__main__":
             cluster.scale(8)
             print("Initiating Client")
             with Client(cluster) as client:
-                print("Upload corrections")
-                shutil.make_archive("corrections", "zip", base_dir="corrections")
-                client.upload_file("corrections.zip")
+#                 print("Upload corrections")
+#                 shutil.make_archive("corrections", "zip", base_dir="corrections")
+#                 client.upload_file("corrections.zip")
                 
-                print("Upload processor")
-                shutil.make_archive("processor", "zip", base_dir="processor")
-                client.upload_file("processor.zip")
+#                 print("Upload processor")
+#                 shutil.make_archive("processor", "zip", base_dir="processor")
+#                 client.upload_file("processor.zip")
                 
                 #print("test file: ", fileset["JetMET"][0])
                 #uproot.open(fileset["JetMET"][0])
@@ -332,11 +332,10 @@ if __name__ == "__main__":
                 print("="*50)
                 print("Begin Processing")
                 print("(Save file: {})".format(args.out_file))
-                print(args.out_file)
                 mkdir_if_not_exists(os.path.dirname(args.out_file))
                 print("="*50)
                 start_time = datetime.datetime.now()
-                out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
+                out = runner(fileset, treename="Events", processor_instance=SimpleProcessor())#OHProcessor(**processor_config))
                 end_time = datetime.datetime.now()
                 elapsed_time = end_time-start_time
                 print("="*50)
