@@ -292,7 +292,7 @@ if __name__ == "__main__":
                                                      "host": socket.gethostname()
                                                     },
                                "job_extra": {
-                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "longlunch")),
+                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "espresso")),
                                    # only executables are transfer, heres are corrections
                                    "transfer_input_files": transfer_input_files
                                             },
@@ -313,17 +313,23 @@ if __name__ == "__main__":
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
+        num_workers = configs["Runner"].getint("num_workers", 1)
         print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
             cluster.adapt(minimum=2, maximum=50)
-            cluster.scale(8)
+            cluster.scale(num_workers)
             print("Initiating Client")
             with Client(cluster) as client:
+                #client.wait_for
                 print("Uploading corrections")
-                for file in transfer_input_filelist:
-                    client.upload_file(file)
+                shutil.make_archive("corrections", "zip", base_dir="corrections")
+                client.upload_file("corrections.zip")
+                #for file in transfer_input_filelist:
+                #    client.upload_file(file)
                 
-                #print("Uploading processor")
+                print("Uploading processor")
+                shutil.make_archive("processor", "zip", base_dir="processor")
+                client.upload_file("processor.zip")
                 #for file in glob.glob("processor/*.py"):
                 #    client.upload_file(file)
                 
