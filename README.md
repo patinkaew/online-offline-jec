@@ -8,6 +8,13 @@ In the begining, the code was designed to compare online (High Level Trigger or 
 
 Detailed installation will be updated later but this study is based on [coffea](https://coffeateam.github.io/coffea/).
 
+## Running on CERNCluster
+1. Start grid with proxy
+2. Start LCG_103 (LCG_102 ships with numba version incompatible with python 3.9)
+### Known problems
+- HTCondor v9_0 recommendation authentication failed: check ```which condor_submit```. this should be ```/usr/bin/condor_submit```. Nightlies ships with different ```condor_submit``` and this might be a problem.
+- code is running, but ```condor_q``` says it is done: unsure, remove conda environment or check logfile
+
 ## Structure
 
 Will be updated later
