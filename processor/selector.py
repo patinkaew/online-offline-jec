@@ -324,7 +324,7 @@ class JetVetoMap(SelectorABC):
         jets_flat_phi = jets_flat.phi # wrap phi in (-pi, pi]
         jets_flat_phi = ak.where(jets_flat_phi <= -np.pi, 2*np.pi + jets_flat_phi, jets_flat_phi)
         jets_flat_phi = ak.where(jets_flat_phi > np.pi, -2*np.pi + jets_flat_phi, jets_flat_phi)
-        mask_flat = (self._jet_veto_map(jets_flat.eta, jets_flat_phi) == 0)
+        mask_flat = (self._jet_veto_map(ak.to_numpy(jets_flat.eta), ak.to_numpy(jets_flat_phi)) == 0)
         mask = ak.unflatten(mask_flat, counts=counts)
         return jets[mask]
     apply = apply_jet_veto_map
