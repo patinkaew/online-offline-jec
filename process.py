@@ -74,7 +74,6 @@ def print_num_inputfiles(fileset):
     print("="*50)
     
 def processing(args, configs, runner, fileset, processor_instance, treename="Events"):
-    print("new")
     print("="*50)
     print("Begin Processing")
     print("(Save file: {})".format(args.out_file))
