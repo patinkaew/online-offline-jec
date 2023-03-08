@@ -351,17 +351,5 @@ if __name__ == "__main__":
                                     )
 
                 # processing
-                output = processor.run_uproot_job(fileset,
-                                              treename='Events',
-                                              processor_instance=OHProcessor(**processor_config),
-                                              executor=processor.dask_executor,
-                                              executor_args={
-                                                  'client': client,
-                                                  'skipbadfiles':False,
-                                                  'schema': ScoutingJMENanoAODSchema, #BaseSchema
-                                                  'xrootdtimeout': 60,
-                                                  'retries': 6,
-                                              },
-                                              chunksize=100000)#, maxchunks=Chunk[1])
-                #processing(args, configs, runner, fileset, treename="Events", 
-                #           processor_instance=OHProcessor(**processor_config))
+                processing(args, configs, runner, fileset, treename="Events", 
+                           processor_instance=OHProcessor(**processor_config))
