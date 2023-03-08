@@ -338,7 +338,7 @@ if __name__ == "__main__":
                                     schema=ScoutingJMENanoAODSchema,
                                     # size of each chunk to process (a unit of work)
                                     # approximately, grow linearly with memory usage
-                                    # chunksize=100000,
+                                    chunksize=configs["Runner"].getint("chunksize", 100_000),
 
                                     # number of maximum chunks to process in each dataset, default to whole dataset.
                                     # do not set this when running the full analysis.
