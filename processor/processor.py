@@ -5,10 +5,9 @@ import hist
 from coffea import processor
 from coffea.lumi_tools import LumiMask, LumiData, LumiList
 
-
-from .selector import *
-from .selectorbase import SelectorList
-from .accumulator import LumiAccumulator
+from processor.selector import *
+from processor.selectorbase import SelectorList
+from processor.accumulator import LumiAccumulator
 
 from collections import defaultdict
 import itertools
