@@ -291,7 +291,7 @@ if __name__ == "__main__":
                                                      "host": socket.gethostname()
                                                     },
                                "job_extra": {
-                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "espresso")),
+                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "longlunch")),
                                    # only executables are transfer, heres are corrections
                                    "transfer_input_files": transfer_input_files
                                             },
@@ -313,9 +313,11 @@ if __name__ == "__main__":
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
         num_workers = configs["Runner"].getint("num_workers", 2)
+        min_jobs = configs["Runner"].getint("min_jobs", 2)
+        max_jobs = configs["Runner"].getint("max_jobs", 64)
         print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
-            cluster.adapt(minimum=2, maximum=50)
+            cluster.adapt(minimum=min_jobs, maximum=max_jobs)
             cluster.scale(num_workers)
             print("Initiating Client")
             with Client(cluster) as client:
