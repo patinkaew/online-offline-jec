@@ -133,10 +133,10 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
-    max_file = 1 # for testing
-    if max_file is not None:
-        for dataset in fileset:
-            fileset[dataset] = sorted(fileset[dataset])[:max_file]
+#     max_file = 1 # for testing
+#     if max_file is not None:
+#         for dataset in fileset:
+#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
     print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
@@ -319,18 +319,10 @@ if __name__ == "__main__":
             cluster.scale(num_workers)
             print("Initiating Client")
             with Client(cluster) as client:
-                #client.wait_for
-                #print("Uploading corrections")
-                #shutil.make_archive("corrections", "zip", base_dir="corrections")
-                #client.upload_file("corrections.zip")
-                #for file in transfer_input_filelist:
-                #    client.upload_file(file)
-                
+                # uploading code, corrections were uploaded with transfer_input_files
                 print("Uploading processor")
                 shutil.make_archive("processor", "zip", base_dir="processor")
                 client.upload_file("processor.zip")
-                #for file in glob.glob("processor/*.py"):
-                #    client.upload_file(file)
                 
                 # define runner
                 runner = processor.Runner(
@@ -345,7 +337,7 @@ if __name__ == "__main__":
                                     # set this when testing
                                     maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
                                     # other arguments
-                                    #skipbadfiles=True,
+                                    skipbadfiles=True,
                                     xrootdtimeout=60
                                     )
 
