@@ -668,18 +668,18 @@ class OHProcessor(processor.ProcessorABC):
         return out
         
     def postprocess(self, accumulator):
-        # compute integrated luminosity
-        if not self.is_data:
-            return accumulator
-        if self.compute_processed_lumi:
-            lumidata = LumiData(self.lumi_csv_path)
-            for dataset in accumulator["processed_lumi"]:
-                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
-                accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(accumulator["processed_lumi"][dataset]["lumi_list"])
-        else:
-            for dataset in accumulator["processed_lumi"]:
-                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
-                accumulator["processed_lumi"][dataset]["lumi"] = None
+#         # compute integrated luminosity
+#         if not self.is_data:
+#             return accumulator
+#         if self.compute_processed_lumi:
+#             lumidata = LumiData(self.lumi_csv_path)
+#             for dataset in accumulator["processed_lumi"]:
+#                 accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+#                 accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(accumulator["processed_lumi"][dataset]["lumi_list"])
+#         else:
+#             for dataset in accumulator["processed_lumi"]:
+#                 accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+#                 accumulator["processed_lumi"][dataset]["lumi"] = None
             
 #         if self.lumi_csv_path:
 #             lumidata = LumiData(self.lumi_csv_path)
