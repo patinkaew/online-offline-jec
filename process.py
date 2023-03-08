@@ -292,7 +292,7 @@ if __name__ == "__main__":
                                                      "host": socket.gethostname()
                                                     },
                                "job_extra": {
-                                   "MY.JobFlavour": '"longlunch"',
+                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "longlunch")),
                                    # only executables are transfer, heres are corrections
                                    "transfer_input_files": transfer_input_files
                                             },
@@ -323,9 +323,9 @@ if __name__ == "__main__":
                 for file in transfer_input_filelist:
                     client.upload_file(file)
                 
-                print("Uploading processor")
-                for file in glob.glob("processor/*.py"):
-                    client.upload_file(file)
+                #print("Uploading processor")
+                #for file in glob.glob("processor/*.py"):
+                #    client.upload_file(file)
                 
                 # define runner
                 runner = processor.Runner(
