@@ -99,7 +99,7 @@ class MinTrigger(SelectorABC):
 #                 self.comparison_operation = (lambda pt, trigger_min_pt: pt > trigger_min_pt)
 #             case _:
 #                 raise ValueError("Invalid type of trigger cut")
-        # LCG 102 use python 3.9.12
+        # LCG 102-103 use python 3.9.12
         if trigger_type == None or trigger_type == "None" or trigger_type == "none":
             self._trigger_type = None
             self._comparison_operation = None
