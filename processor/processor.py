@@ -289,8 +289,8 @@ class OHProcessor(processor.ProcessorABC):
         events = self.off_jet_Id(events, cutflow)
         events = self.on_jet_Id(events, cutflow)
         # jet veto map
-        #events = self.off_jet_veto_map(events, cutflow)
-        #events = self.on_jet_veto_map(events, cutflow)
+        events = self.off_jet_veto_map(events, cutflow)
+        events = self.on_jet_veto_map(events, cutflow)
         
         # minimum numbers of jets
         events = self.min_off_jet(events, cutflow)
@@ -669,17 +669,17 @@ class OHProcessor(processor.ProcessorABC):
         
     def postprocess(self, accumulator):
         # compute integrated luminosity
-        if not self.is_data:
-            return accumulator
-        if self.compute_processed_lumi:
-            lumidata = LumiData(self.lumi_csv_path)
-            for dataset in accumulator["processed_lumi"]:
-                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
-                accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(accumulator["processed_lumi"][dataset]["lumi_list"])
-        else:
-            for dataset in accumulator["processed_lumi"]:
-                accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
-                accumulator["processed_lumi"][dataset]["lumi"] = None
+#         if not self.is_data:
+#             return accumulator
+#         if self.compute_processed_lumi:
+#             lumidata = LumiData(self.lumi_csv_path)
+#             for dataset in accumulator["processed_lumi"]:
+#                 accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+#                 accumulator["processed_lumi"][dataset]["lumi"] = lumidata.get_lumi(accumulator["processed_lumi"][dataset]["lumi_list"])
+#         else:
+#             for dataset in accumulator["processed_lumi"]:
+#                 accumulator["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+#                 accumulator["processed_lumi"][dataset]["lumi"] = None
             
 #         if self.lumi_csv_path:
 #             lumidata = LumiData(self.lumi_csv_path)
