@@ -265,8 +265,8 @@ class OHProcessor(processor.ProcessorABC):
         #    cutflow["lumimask"] += len(events)
         # save processed lumi list
         # lumi_list = list(set(zip(events.run, events.luminosityBlock)))
-        #if self.is_data and self.save_processed_lumi:
-        #    lumi_list = LumiAccumulator(events.run, events.luminosityBlock, auto_unique=True)
+        if self.is_data and self.save_processed_lumi:
+            lumi_list = LumiAccumulator(events.run, events.luminosityBlock, auto_unique=True)
         
         # events-level selections
         # good event cuts
