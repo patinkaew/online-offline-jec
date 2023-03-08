@@ -289,8 +289,8 @@ class OHProcessor(processor.ProcessorABC):
         events = self.off_jet_Id(events, cutflow)
         events = self.on_jet_Id(events, cutflow)
         # jet veto map
-        events = self.off_jet_veto_map(events, cutflow)
-        events = self.on_jet_veto_map(events, cutflow)
+        #events = self.off_jet_veto_map(events, cutflow)
+        #events = self.on_jet_veto_map(events, cutflow)
         
         # minimum numbers of jets
         events = self.min_off_jet(events, cutflow)
