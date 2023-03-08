@@ -9,7 +9,7 @@ In the begining, the code was designed to compare online (High Level Trigger or 
 Detailed installation will be updated later but this study is based on [coffea](https://coffeateam.github.io/coffea/).
 
 ## Running on CERNCluster
-1. Start grid with proxy: ```voms-proxy-init --rfc --voms cms -valid 192:00 --out ~/private/gridproxy.pem``` (in config file, set ```proxy_path```)
+1. Start grid with proxy: ```voms-proxy-init --rfc --voms cms -valid 192:00 --out ~/private/gridproxy.pem``` (in config file, set ```proxy_path``` accordingly)
 2. Start LCG_103 (LCG_102 ships with numba version incompatible with python 3.9): ```. /cvmfs/sft.cern.ch/lcg/views/LCG_103/x86_64-centos7-gcc11-opt/setup.sh```
 3. Run code like usual (in config file, set ```executor``` to dask)
 ### Known problems
