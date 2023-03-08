@@ -14,7 +14,7 @@ from coffea import util as cutil
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
 from processor.processor import OHProcessor, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
-import util
+from util import *
 
 import warnings
 import time
@@ -72,6 +72,35 @@ def print_num_inputfiles(fileset):
     [print("{} : {}".format(key, len(value))) for key, value in fileset.items()]
     print("Total : {}".format(sum(map(len, fileset.values()))))
     print("="*50)
+    
+def processing(args, configs, runner, fileset, processor_instance, treename="Events"):
+    print("new")
+    print("="*50)
+    print("Begin Processing")
+    print("(Save file: {})".format(args.out_file))
+    mkdir_if_not_exists(os.path.dirname(args.out_file))
+    print("="*50)
+    start_time = datetime.datetime.now()
+    out = runner(fileset, treename=treename, processor_instance=processor_instance)
+    end_time = datetime.datetime.now()
+    elapsed_time = end_time-start_time
+    print("="*50)
+
+    print("Finish Processing")
+    print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
+    print_dict_json(out.get("cutflow", dict()), title="Cutflow")
+
+    # post-processing output
+    out["arguments"] = vars(args)
+    out["configurations"] = configs._sections
+    out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
+    out["process_time"] = elapsed_time
+    print("="*50)
+
+    print("Save to Output file: {}".format(args.out_file))
+    cutil.save(out, args.out_file)
+    print("All Complete!")
+
 
 if __name__ == "__main__":
     # parsing arguments and configurations
@@ -88,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument("--on_jet_tag_min_pt", type=float, required=False)
     
     args = parser.parse_args()
-    util.print_dict_json(vars(args), title="Arguments")
+    print_dict_json(vars(args), title="Arguments")
     
     configs = configparser.ConfigParser()
     configs.read(args.config_file)
@@ -101,7 +130,7 @@ if __name__ == "__main__":
     # change to list for printing
     configs._sections["Processor"]["off_jet_weight_filelist"] = eval(configs._sections["Processor"]["off_jet_weight_filelist"])
     configs._sections["Processor"]["on_jet_weight_filelist"] = eval(configs._sections["Processor"]["on_jet_weight_filelist"])
-    util.print_dict_json(configs._sections, title="Configurations")
+    print_dict_json(configs._sections, title="Configurations")
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
@@ -199,31 +228,8 @@ if __name__ == "__main__":
                 maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
                 )
         
-        print("="*50)
-        print("Begin Processing")
-        print("(Save file: {})".format(args.out_file))
-        util.mkdir_if_not_exists(os.path.dirname(args.out_file))
-        print("="*50)
-        start_time = datetime.datetime.now()
-        out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
-        end_time = datetime.datetime.now()
-        elapsed_time = end_time-start_time
-        print("="*50)
-
-        print("Finish Processing")
-        print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
-        print_dict_json(out.get("cutflow", dict()), title="Cutflow")
-
-        # post-processing output
-        out["arguments"] = vars(args)
-        out["configurations"] = configs._sections
-        out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
-        out["process_time"] = elapsed_time
-        print("="*50)
-
-        print("Save to Output file: {}".format(args.out_file))
-        cutil.save(out, args.out_file)
-        print("All Complete!")
+        # processing
+        processing(args, configs, runner, fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
         
     else: # distributed
         # currently only for lxplus
@@ -269,7 +275,8 @@ if __name__ == "__main__":
                 elif isinstance(processor_config[config], list):
                     transfer_input_filelist += processor_config[config]
                 else:
-                    raise ValueError("Processor config {} was recognized as path, but value {} is neither str or list".format(config, processor[config]))
+                    raise ValueError("Processor config {} was recognized as path, but value {} is neither str or list"\
+                                     .format(config, processor[config]))
         transfer_input_files = ",".join(transfer_input_filelist)
 
         port_number = configs["Runner"].getint("port_number", 8786)
@@ -338,28 +345,5 @@ if __name__ == "__main__":
                                     )
 
                 # processing
-                print("="*50)
-                print("Begin Processing")
-                print("(Save file: {})".format(args.out_file))
-                util.mkdir_if_not_exists(os.path.dirname(args.out_file))
-                print("="*50)
-                start_time = datetime.datetime.now()
-                out = runner(fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
-                end_time = datetime.datetime.now()
-                elapsed_time = end_time-start_time
-                print("="*50)
-
-                print("Finish Processing")
-                print("Elapsed time: {:.3f} s".format(elapsed_time.total_seconds()))
-                print_dict_json(out.get("cutflow", dict()), title="Cutflow")
-
-                # post-processing output
-                out["arguments"] = vars(args)
-                out["configurations"] = configs._sections
-                out["start_timestamp"] = start_time.strftime("%d/%m/%Y, %H:%M:%S")
-                out["process_time"] = elapsed_time
-                print("="*50)
-
-                print("Save to Output file: {}".format(args.out_file))
-                cutil.save(out, args.out_file)
-                print("All Complete!")
+                processing(args, configs, runner, fileset, treename="Events", 
+                           processor_instance=OHProcessor(**processor_config))
