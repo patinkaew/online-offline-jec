@@ -312,7 +312,7 @@ if __name__ == "__main__":
         
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
-        num_workers = configs["Runner"].getint("num_workers", 1)
+        num_workers = configs["Runner"].getint("num_workers", 2)
         print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
             cluster.adapt(minimum=2, maximum=50)
@@ -321,6 +321,8 @@ if __name__ == "__main__":
             with Client(cluster) as client:
                 # uploading code, corrections were uploaded with transfer_input_files
                 print("Uploading processor")
+                # need to zip, so that processor retains directory structure
+                # upload_file individually will lose directory structure
                 shutil.make_archive("processor", "zip", base_dir="processor")
                 client.upload_file("processor.zip")
                 
