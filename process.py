@@ -321,9 +321,9 @@ if __name__ == "__main__":
             print("Initiating Client")
             with Client(cluster) as client:
                 #client.wait_for
-                print("Uploading corrections")
-                shutil.make_archive("corrections", "zip", base_dir="corrections")
-                client.upload_file("corrections.zip")
+                #print("Uploading corrections")
+                #shutil.make_archive("corrections", "zip", base_dir="corrections")
+                #client.upload_file("corrections.zip")
                 #for file in transfer_input_filelist:
                 #    client.upload_file(file)
                 
