@@ -35,6 +35,7 @@ class OHProcessor(processor.ProcessorABC):
                  
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
+                 #first_PV="PV", second_PV="None", # event_level, match PV from two reconstruction
                  min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
                  MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
                  max_MET_sumET=None, min_MET=45, 
@@ -64,6 +65,21 @@ class OHProcessor(processor.ProcessorABC):
                  eta_binning="coarse",
                  # phi_binning=None,
                  fill_gen=False, # (only MC)
+                 
+                 # gen-jet selection if fill_gen is True
+                 gen_jet_name=None,
+                 gen_jet_label="Gen",
+                 gen_jet_Id=None,
+                 gen_jet_veto_map_json_path=None,
+                 gen_jet_veto_map_correction_name=None,
+                 gen_jet_veto_map_year=None,
+                 gen_jet_veto_map_type="jetvetomap",
+                 gen_jet_tag_probe=True,
+                 gen_jet_tag_min_pt=0,
+                 gen_jet_max_alpha=1.0,
+                 
+                 ave_jet=False, # compute (offline pt + online pt) / 2
+                 use_weight=True, # (only MC)
                  hist_to_fill="all",
                  
                  verbose=0):
@@ -97,6 +113,9 @@ class OHProcessor(processor.ProcessorABC):
         flag_filters = flag_filters if flag_filters else []
         flag_filters = [flag_filters] if isinstance(flag_filters, str) else flag_filters
         self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
+        
+        # main PV matching
+        #self.close_pv_z = ClosePV_z(first_PV, second_PV, sigma_multiple=5) # max_dz=0.2
         
         # minimum number of jets
         # if tag and probe will be applied, need at least 2
@@ -149,6 +168,8 @@ class OHProcessor(processor.ProcessorABC):
         # histograms
         self.is_data = is_data
         self.storage = hist.storage.Weight() #storage
+        self.use_weight = use_weight
+        self.ave_jet = ave_jet
         self.mix_correction_level = mix_correction_level
         pt_axis_dict = {
                         "log": 
@@ -204,11 +225,22 @@ class OHProcessor(processor.ProcessorABC):
         self.eta_binning = eta_binning
         self.get_eta_axis = lambda eta_binning, num_bins=50, name="jet_eta", label=r"$\eta^{jet}$": \
                                eta_axis_dict[eta_binning](name, label) # syntactic sugar
+        # fill_gen and generator
         self.fill_gen = fill_gen
+        if (not self.is_data) and self.fill_gen:
+            assert gen_jet_name != None, "Must provide gen jet name"
+            self.gen_jet_name = gen_jet_name
+            self.gen_jet_label = gen_jet_label if gen_jet_label else gen_jet_name
+            self.gen_jet_Id = JetIdentification(gen_jet_Id, gen_jet_label, verbose)
+            self.gen_jet_veto_map = JetVetoMap(gen_jet_veto_map_json_path, gen_jet_veto_map_correction_name, 
+                                               gen_jet_veto_map_year, gen_jet_veto_map_type, gen_jet_label)
+            self.gen_jet_tagprobe = TriggerDijetTagAndProbe(gen_jet_tag_min_pt if gen_jet_tag_probe else None, 
+                                                            max_alpha=gen_jet_max_alpha, swap=True, name=gen_jet_label)
+            self.gen_deltaR_matching = PairwiseDeltaRMatching(max_deltaR=max_deltaR)
+            
         if isinstance(hist_to_fill, str):
-            hist_to_fill = {hist_to_fill}
-        else:
-            hist_to_fill = set(hist_to_fill)
+            hist_to_fill = hist_to_fill.split()
+        hist_to_fill = set(hist_to_fill)
         if "2d" in hist_to_fill or "all" in hist_to_fill:
             hist_to_fill.update(["pt_response", "pt_percent_difference", "comparison"])
             if off_jet_tag_probe or on_jet_tag_probe:
@@ -277,6 +309,9 @@ class OHProcessor(processor.ProcessorABC):
         # Flag filters
         events = self.flag_filters(events, cutflow)
         
+        # PV matching
+        #events = self.close_pv_z(events, cutflow)
+        
         # MET cuts
         events = self.max_MET(events, cutflow)
         events = self.max_MET_sumET(events, cutflow)
@@ -317,6 +352,21 @@ class OHProcessor(processor.ProcessorABC):
         
         # delta R matching
         matched_off_jets, matched_on_jets = self.deltaR_matching(off_jets, on_jets, cutflow)
+        
+        # if fill_gen
+        if (not self.is_data) and self.fill_gen:
+            gen_jets = events[self.gen_jet_name]
+            gen_jets = self.gen_jet_Id(gen_jets, cutflow)
+            gen_jets = self.gen_jet_veto_map(gen_jets, cutflow)
+            if self.gen_jet_tagprobe.status and len(gen_jets) > 0:
+                at_least_two_gen_mask = (ak.num(gen_jets) >= 2)
+                gen_jets = gen_jets[at_least_two_gen_mask]
+                gen_jets_tag, gen_jets = self.gen_jet_tagprobe(gen_jets[:, 0], gen_jets[:, 1], gen_jets, cutflow)
+                gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
+                = self.gen_deltaR_matching([off_jets[at_least_two_gen_mask], on_jets[at_least_two_gen_mask], gen_jets], cutflow)
+            else:
+                gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
+                = self.gen_deltaR_matching([off_jets, on_jets, gen_jets], cutflow)
         
         # select n leading jets to plot
         matched_off_jets = self.max_leading_jet(matched_off_jets)
@@ -364,18 +414,24 @@ class OHProcessor(processor.ProcessorABC):
         # jet_type_axis is used to specify which jet is a control, e.g. used for x-axis and selecting eta range
         jet_types = [self.off_jet_label, self.on_jet_label]
         if (not self.is_data) and self.fill_gen:
-            try:
-                matched_off_genjets = matched_off_jets.matched_gen # try finding genjets
-                jet_types.append(self.off_jet_label+"_Gen")
-            except:
-                if self.verbose > 0:
-                    warnings.warn("Fail to retrieve matched gen for offline")
-            try:
-                matched_on_genjets = matched_on_jets.matched_gen # try finding genjets
-                jet_types.append(self.on_jet_label+"_Gen")
-            except:
-                if self.verbose > 0:
-                    warnings.warn("Fail to retrieve matched gen for online")
+            jet_types += ["Gen"]
+            jet_types += [self.off_jet_label+" (Matched Gen)", self.on_jet_label+" (Matched Gen)"]
+        if self.ave_jet:
+            jet_types += ["Ave"]
+            if (not self.is_data) and self.fill_gen:
+                jet_types += ["Ave (Matched Gen)"]
+#             try:
+#                 matched_off_genjets = matched_off_jets.matched_gen # try finding genjets
+#                 jet_types.append(self.off_jet_label+"_Gen")
+#             except:
+#                 if self.verbose > 0:
+#                     warnings.warn("Fail to retrieve matched gen for offline")
+#             try:
+#                 matched_on_genjets = matched_on_jets.matched_gen # try finding genjets
+#                 jet_types.append(self.on_jet_label+"_Gen")
+#             except:
+#                 if self.verbose > 0:
+#                     warnings.warn("Fail to retrieve matched gen for online")
         jet_type_axis = hist.axis.StrCategory(jet_types, name="jet_type", label="Types of Jet", growth=False)
         
         # original variable axes
@@ -406,7 +462,9 @@ class OHProcessor(processor.ProcessorABC):
                                               name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
-            out["comparison"] = hist.Hist(dataset_axis, correction_level_axis, jet_type_axis, jet_eta_axis, jet_phi_axis,
+            cmp_jet_types = [self.off_jet_label, self.off_jet_label + " (Matched Gen)"]
+            cmp_jet_type_axis = hist.axis.StrCategory(cmp_jet_types, name="jet_type", label="Types of Jet", growth=False)
+            out["comparison"] = hist.Hist(dataset_axis, correction_level_axis, cmp_jet_type_axis, jet_eta_axis, jet_phi_axis,
                                           off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
                                           name="comparison", label="Online vs Offline")
         # tag and probe histogram    
@@ -456,10 +514,16 @@ class OHProcessor(processor.ProcessorABC):
             return out
         
         # get event weight
-        if self.is_data:
-            weight = None
-        else:
+        if (not self.is_data) and self.use_weight:
             weight = ak.flatten(ak.broadcast_arrays(events.genWeight, matched_off_jets.pt)[0])
+            if self.fill_gen:
+                gen_matched_weight = ak.flatten(ak.broadcast_arrays(events.genWeight, gen_matched_off_jets.pt)[0])
+                if self.gen_jet_tagprobe.status:
+                    gen_matched_weight = ak.flatten(ak.broadcast_arrays(events[at_least_two_gen_mask].genWeight, 
+                                                                        gen_matched_off_jets.pt)[0])
+        else:
+            weight = None
+            gen_matched_weight = None
         
         # loop correction levels to fill histograms
         for (off_correction_level_name, on_correction_level_name), correction_level_label in correction_level_dict.items():
@@ -487,31 +551,73 @@ class OHProcessor(processor.ProcessorABC):
                 
                 # optionally, fill gen as x axis
                 if (not self.is_data) and self.fill_gen:
-                    try:
-                        matched_off_genjets = matched_off_jets.matched_gen
+                    gen_matched_pt_response = gen_matched_on_jets["pt_"+on_correction_level_name] / \
+                                              gen_matched_off_jets["pt_"+off_correction_level_name]
+                    out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+                                            jet_type="Gen",
+                                            jet_pt=ak.flatten(gen_matched_gen_jets.pt), 
+                                            jet_eta=ak.flatten(gen_matched_gen_jets.eta), 
+                                            jet_phi=ak.flatten(gen_matched_gen_jets.phi), 
+                                            pt_response=ak.flatten(gen_matched_pt_response),
+                                            weight=gen_matched_weight)
+                    out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+                                            jet_type=self.off_jet_label + " (Matched Gen)",
+                                            jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
+                                            jet_eta=ak.flatten(gen_matched_off_jets.eta), \
+                                            jet_phi=ak.flatten(gen_matched_off_jets.phi), \
+                                            pt_response=ak.flatten(gen_matched_pt_response),
+                                            weight=gen_matched_weight)
+                    out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+                                            jet_type=self.on_jet_label + " (Matched Gen)", \
+                                            jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]), \
+                                            jet_eta=ak.flatten(gen_matched_on_jets.eta), \
+                                            jet_phi=ak.flatten(gen_matched_on_jets.phi), \
+                                            pt_response=(1 / ak.flatten(gen_matched_pt_response)),
+                                            weight=gen_matched_weight)
+                if self.ave_jet:
+                    out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+                                            jet_type="Ave",
+                                            jet_pt=ak.flatten(0.5*(matched_off_jets["pt_"+on_correction_level_name]\
+                                                              + matched_on_jets["pt_"+on_correction_level_name])), \
+                                            jet_eta=ak.flatten(matched_off_jets.eta), \
+                                            jet_phi=ak.flatten(matched_off_jets.phi), \
+                                            pt_response=ak.flatten(pt_response),
+                                            weight=weight)
+                    if (not self.is_data) and self.fill_gen:
                         out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
-                                           jet_type=self.off_jet_label + "_Gen", \
-                                           jet_pt=ak.to_numpy(ak.flatten(matched_off_genjets.pt), allow_missing=True), \
-                                           jet_eta=ak.to_numpy(ak.flatten(matched_off_genjets.eta), allow_missing=True), \
-                                           jet_phi=ak.to_numpy(ak.flatten(matched_off_genjets.phi), allow_missing=True), \
-                                           pt_response=ak.flatten(pt_response),
-                                           weight=weight)
-                    except:   
-                        if self.verbose > 0:
-                            warnings.warn("Fail to retrieve matched gen for offline")
-                    try:
-                        matched_on_genjets = matched_on_jets.matched_gen
-                        out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
-                                                jet_type=self.on_jet_label + "_Gen", \
-                                                jet_pt=ak.to_numpy(ak.flatten(matched_on_genjets.pt), allow_missing=True), \
-                                                jet_eta=ak.to_numpy(ak.flatten(matched_on_genjets.eta), allow_missing=True), \
-                                                jet_phi=ak.to_numpy(ak.flatten(matched_on_genjets.phi), allow_missing=True), \
-                                                pt_response=(1 / ak.flatten(pt_response)),
-                                                weight=weight)
+                                                jet_type="Ave (Matched Gen)",
+                                                jet_pt=ak.flatten(0.5*(gen_matched_off_jets["pt_"+on_correction_level_name]\
+                                                                  + gen_matched_on_jets["pt_"+on_correction_level_name])), \
+                                                jet_eta=ak.flatten(gen_matched_off_jets.eta), \
+                                                jet_phi=ak.flatten(gen_matched_off_jets.phi), \
+                                                pt_response=ak.flatten(gen_matched_pt_response),
+                                                weight=gen_matched_weight)
+                        
+#                     try:
+#                         matched_off_genjets = matched_off_jets.matched_gen
+#                         out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+#                                            jet_type=self.off_jet_label + "_Gen", \
+#                                            jet_pt=ak.to_numpy(ak.flatten(matched_off_genjets.pt), allow_missing=True), \
+#                                            jet_eta=ak.to_numpy(ak.flatten(matched_off_genjets.eta), allow_missing=True), \
+#                                            jet_phi=ak.to_numpy(ak.flatten(matched_off_genjets.phi), allow_missing=True), \
+#                                            pt_response=ak.flatten(pt_response),
+#                                            weight=weight)
+#                     except:   
+#                         if self.verbose > 0:
+#                             warnings.warn("Fail to retrieve matched gen for offline")
+#                     try:
+#                         matched_on_genjets = matched_on_jets.matched_gen
+#                         out["pt_response"].fill(dataset=dataset, correction_level=correction_level_label, \
+#                                                 jet_type=self.on_jet_label + "_Gen", \
+#                                                 jet_pt=ak.to_numpy(ak.flatten(matched_on_genjets.pt), allow_missing=True), \
+#                                                 jet_eta=ak.to_numpy(ak.flatten(matched_on_genjets.eta), allow_missing=True), \
+#                                                 jet_phi=ak.to_numpy(ak.flatten(matched_on_genjets.phi), allow_missing=True), \
+#                                                 pt_response=(1 / ak.flatten(pt_response)),
+#                                                 weight=weight)
 
-                    except:
-                        if self.verbose > 0:
-                            warnings.warn("Fail to retrieve matched gen for online")
+#                     except:
+#                         if self.verbose > 0:
+#                             warnings.warn("Fail to retrieve matched gen for online")
             end_time = time.time()
             #print("respone: ", end_time - start_time)
             
@@ -578,31 +684,38 @@ class OHProcessor(processor.ProcessorABC):
                                        weight=weight)
                 
                 if (not self.is_data) and self.fill_gen:
-                    try:
-                        matched_off_genjets = matched_off_jets.matched_gen
-                        out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, \
-                                               jet_type=self.off_jet_label + "_Gen", \
-                                               jet_eta=ak.to_numpy(ak.flatten(matched_off_genjets.eta), allow_missing=True),
-                                               jet_phi=ak.to_numpy(ak.flatten(matched_off_genjets.phi), allow_missing=True),     
-                                               off_jet_pt=ak.to_numpy(ak.flatten(matched_off_genjets.pt), allow_missing=True),
-                                               on_jet_pt=ak.flatten(matched_off_jets["pt_"+off_correction_level_name]),
-                                               weight=weight)
-                    except:   
-                        if self.verbose > 0:
-                            warnings.warn("Fail to retrieve matched gen for offline")
+                    out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
+                                           jet_type=self.off_jet_label + " (Matched Gen)",\
+                                           jet_eta=ak.flatten(gen_matched_off_jets.eta), \
+                                           jet_phi=ak.flatten(gen_matched_off_jets.phi), \
+                                           off_jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
+                                           on_jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]),
+                                           weight=gen_matched_weight)
+#                     try:
+#                         matched_off_genjets = matched_off_jets.matched_gen
+#                         out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, \
+#                                                jet_type=self.off_jet_label + "_Gen", \
+#                                                jet_eta=ak.to_numpy(ak.flatten(matched_off_genjets.eta), allow_missing=True),
+#                                                jet_phi=ak.to_numpy(ak.flatten(matched_off_genjets.phi), allow_missing=True),     
+#                                                off_jet_pt=ak.to_numpy(ak.flatten(matched_off_genjets.pt), allow_missing=True),
+#                                                on_jet_pt=ak.flatten(matched_off_jets["pt_"+off_correction_level_name]),
+#                                                weight=weight)
+#                     except:   
+#                         if self.verbose > 0:
+#                             warnings.warn("Fail to retrieve matched gen for offline")
                             
-                    try:
-                        matched_on_genjets = matched_on_jets.matched_gen
-                        out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, \
-                                               jet_type=self.on_jet_label + "_Gen", \
-                                               jet_eta=ak.to_numpy(ak.flatten(matched_on_genjets.eta), allow_missing=True),
-                                               jet_phi=ak.to_numpy(ak.flatten(matched_on_genjets.phi), allow_missing=True),     
-                                               off_jet_pt=ak.to_numpy(ak.flatten(matched_on_genjets.pt), allow_missing=True),
-                                               on_jet_pt=ak.flatten(matched_on_jets["pt_"+off_correction_level_name]),
-                                               weight=weight)
-                    except:   
-                        if self.verbose > 0:
-                            warnings.warn("Fail to retrieve matched gen for online")
+#                     try:
+#                         matched_on_genjets = matched_on_jets.matched_gen
+#                         out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, \
+#                                                jet_type=self.on_jet_label + "_Gen", \
+#                                                jet_eta=ak.to_numpy(ak.flatten(matched_on_genjets.eta), allow_missing=True),
+#                                                jet_phi=ak.to_numpy(ak.flatten(matched_on_genjets.phi), allow_missing=True),     
+#                                                off_jet_pt=ak.to_numpy(ak.flatten(matched_on_genjets.pt), allow_missing=True),
+#                                                on_jet_pt=ak.flatten(matched_on_jets["pt_"+off_correction_level_name]),
+#                                                weight=weight)
+#                     except:   
+#                         if self.verbose > 0:
+#                             warnings.warn("Fail to retrieve matched gen for online")
             end_time = time.time()
             #print("comp: ", end_time - start_time)
             

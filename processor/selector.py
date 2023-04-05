@@ -10,6 +10,7 @@ from coffea.jetmet_tools import FactorizedJetCorrector, JetCorrectionUncertainty
 import correctionlib
 
 from functools import partial
+import itertools
 import string
 import warnings
 
@@ -55,6 +56,45 @@ class MaxPV_rxy(SelectorABC):
     def apply_max_PV_rxy(self, events):
         return events[np.sqrt(events.PV.x*events.PV.x + events.PV.y*events.PV.y) < self._max_PV_rxy]
     apply = apply_max_PV_rxy
+    
+class ClosePV_z(SelectorABC):
+    def __init__(self, first_PV, second_PV, max_dz=None, sigma_multiple=None): # 0.2 for gen, 5 * sigma
+        super().__init__()
+        assert (max_dz == None and sigma_multiple == None) or (bool(max_dz) != bool(sigma_multiple)) , "Must pick either absolute max dz or multiple of z sigma"
+        self._first_PV = first_PV
+        self._second_PV = second_PV
+        self._max_dz = max_dz
+        self._sigma_multiple = sigma_multiple
+        if first_PV == None or second_PV == None or (self._max_dz == None and self._sigma_multiple == None):
+            self.off()
+    def __str__(self):
+        if self._max_dz:
+            return "|PV1_z - PV2_z| < {}".format(self._max_dz)
+        else:
+            return "|PV1_z - PV2_z| < {} * sigma".format(self._sigma_multiple)
+    def apply(self, events):
+        if self._max_dz == None and self._sigma_multiple == None:
+            return events
+        ndim1 = events[self._first_PV].ndim
+        ndim2 = events[self._second_PV].ndim
+        z1 = events[self._first_PV].z if ndim1 == 1 else events[self._first_PV].z[:, 0]
+        z2 = events[self._second_PV].z if ndim2 == 1 else events[self._second_PV].z[:, 0]
+        
+        if self._max_dz:
+            return events[np.abs(z1 - z2) < self._max_dz]
+        else:
+            assert "zError" in events[self._first_PV].fields or "zError" in events[self._second_PV].fields, "At least one type of PV must contain error information"
+            if "zError" in events[self._first_PV].fields:
+                pv1_zError = events[self._first_PV].zError if ndim1 == 1 else events[self._first_PV].zError[:, 0]
+            else:
+                pv1_zError = np.full(len(events), -np.inf)
+            if "zError" in events[self._second_PV].fields:
+                pv2_zError = events[self._second_PV].zError if ndim2 == 1 else events[self._second_PV].zError[:, 0]
+            else:
+                pv2_zError = np.full(len(events), -np.inf)
+            zError = np.maximum(pv1_zError, pv2_zError)
+            return events[np.abs(z1-z2) < self._sigma_multiple * zError]
+    apply_close_PV_z = apply
 
 class MinPhysicsObject(SelectorABC):
     def __init__(self, physics_object_name, min_physics_object=0, name=""):
@@ -217,18 +257,18 @@ class MinObject(SelectorABC):
 
 class ObjectInRange(SelectorABC):
     def __init__(self, field, min_value=-np.inf, max_value=np.inf, mirror=False, name=""):
-        super.__init__()
+        super().__init__()
         if field:
-            assert len(name) and name != None, "must provide unique name"
+            assert len(name) > 0 and name != None, "must provide unique name"
         self._field = field
         self._min_value = min_value
         self._max_value = max_value
         self._mirror = mirror
         self._name = name
     def __str__(self):
-        return "select {} {} in {} - {}".format(self._name, self._field, self._min_value, self._max_value)
+        return "select {} {} in range ({}, {})".format(self._name, self._field, self._min_value, self._max_value)
     def apply_object_in_range(self, physics_object):
-        if not field:
+        if not self._field:
             return physics_object
         mask = (physics_object[self._field] > self._min_value) & (physics_object[self._field] < self._max_value)
         if self._mirror:
@@ -238,12 +278,12 @@ class ObjectInRange(SelectorABC):
 
 class ObjectInPtRange(ObjectInRange):
     def __init__(self, min_pt=-np.inf, max_pt=np.inf, name=""):
-        super.__init__("pt", min_pt, max_pt, False, name)
+        super().__init__("pt", min_pt, max_pt, False, name)
     apply_object_in_pt_range = ObjectInRange.apply
     
 class ObjectInEtaRange(ObjectInRange):
     def __init__(self, min_eta=-np.inf, max_eta=np.inf, mirror=False, name=""):
-        super.__init__("eta", min_eta, max_eta, mirror, name)
+        super().__init__("eta", min_eta, max_eta, mirror, name)
     apply_object_in_eta_range = ObjectInRange.apply
         
 class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied actually. For T&P, this shouldn't matter
@@ -318,6 +358,8 @@ class JetVetoMap(SelectorABC):
     def apply_jet_veto_map(self, jets):
         if not self._jet_veto_map:
             return jets
+        # hard coded eta range
+        jets = ObjectInEtaRange(-5.191, 5.191, mirror=False, name="|eta| < 5.191")(jets)
         # flatten and unflatten (this is required for correctionlib API)
         jets_flat = ak.flatten(jets)
         counts = ak.num(jets)
@@ -561,7 +603,7 @@ class DeltaRMatching(SelectorABC):
     def __str__(self):
         return "delta R < {}".format(self._max_deltaR) 
     def apply_deltaR_matching(self, first, second):
-        assert len(first) == len(second), "length of two physics objects must equal, but get {} and {}".format(len(first), len(second))
+        assert len(first) == len(second), "length of two physics objects must equal, but got {} and {}".format(len(first), len(second))
         if len(first) == 0:
             return first, second
         matched = ak.cartesian([first, second])
@@ -583,3 +625,36 @@ class DeltaRMatching(SelectorABC):
             else:
                 cutflow[str(self)+" (off)"] += np.sum(ak.num(first) > 0)
         return first, second
+    
+class PairwiseDeltaRMatching(SelectorABC):
+    def __init__(self, max_deltaR):
+        super().__init__()
+        self._max_deltaR = max_deltaR
+    def __str__(self):
+        return "pair-wise delta R < {}".format(self._max_deltaR) 
+    def apply_pairwise_deltaR_matching(self, arrays):
+        if len(arrays) == 0:
+            return arrays
+        for array in arrays:
+            assert len(array) == len(arrays[0]), "length of all physics objects must equal, but got {}".format(list(map(len, arrays)))
+        if len(arrays[0]) == 0:
+            return arrays
+        matched = ak.cartesian(arrays)
+        counts = ak.num(matched)
+        mask = ak.unflatten(np.full(np.sum(counts), True), counts) # all True mask
+        num_objects = len(arrays)
+        for first_slot, second_slot in itertools.combinations(map(str, range(num_objects)), 2):
+            mask = (mask & ((matched[first_slot].delta_r(matched[second_slot]) < self._max_deltaR)))
+        matched = matched[mask] # apply mask
+        return tuple([matched[slot] for slot in map(str, range(num_objects))])
+    apply = apply_pairwise_deltaR_matching
+    
+    def __call__(self, arrays, cutflow=None):
+        if self.status:
+            arrays = self.apply(arrays)
+        if cutflow:
+            if self.status:
+                cutflow[str(self)] += np.sum(ak.num(arrays[0]) > 0)
+            else:
+                cutflow[str(self)+" (off)"] += np.sum(ak.num(arrays[0]) > 0)
+        return arrays
