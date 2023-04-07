@@ -31,8 +31,20 @@ def get_filelist(data_dir):
     if len(filelist) == 0:
         filelist = glob.glob(os.path.join(data_dir, "*/*.root"))
     return filelist
-    
 
+def remove_badfiles(fileset):
+    print("="*50)
+    print("checking bad files")
+    for dataset in fileset:
+        for filename in fileset[dataset]:
+            badcounts = 0
+            if "Events" not in uproot.open(filename).keys():
+                print("remove file: {} from dataset {}".format(filename, dataset))
+                fileset[dataset].remove(filename)
+                badcounts += 1
+        print("remove {} bad files from dataset {}".format(badcounts, dataset))
+    print("="*50)
+    
 def build_fileset(data_dir, dataset_names=None):
     if dataset_names is not None:
         assert len(data_dir) == len(dataset_names)
@@ -43,6 +55,7 @@ def build_fileset(data_dir, dataset_names=None):
     
     filelist = map(get_filelist, data_dir)
     return dict(zip(dataset_names, filelist))
+
 
 # work in progress
 # def build_fileset(input_paths, dataset_names=None):
@@ -102,7 +115,7 @@ def print_num_inputfiles(fileset):
     [print("{} : {}".format(key, len(value))) for key, value in fileset.items()]
     print("Total : {}".format(sum(map(len, fileset.values()))))
     print("="*50)
-    
+            
 def processing(args, configs, runner, fileset, processor_instance, treename="Events"):
     print("="*50)
     print("Begin Processing")
@@ -163,6 +176,7 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
+    remove_badfiles(fileset)
 #     max_file = 1 # for testing
 #     if max_file is not None:
 #         for dataset in fileset:
