@@ -27,7 +27,11 @@ def get_default_dataset_name(data_dir):
     return data_dir[start_index+1: end_index]
     
 def get_filelist(data_dir):
-    return glob.glob(os.path.join(data_dir, "*/*/*.root"))
+    filelist = glob.glob(os.path.join(data_dir, "*/*/*.root"))
+    if len(filelist) == 0:
+        filelist = glob.glob(os.path.join(data_dir, "*/*.root"))
+    return filelist
+    
 
 def build_fileset(data_dir, dataset_names=None):
     if dataset_names is not None:
@@ -39,6 +43,32 @@ def build_fileset(data_dir, dataset_names=None):
     
     filelist = map(get_filelist, data_dir)
     return dict(zip(dataset_names, filelist))
+
+# work in progress
+# def build_fileset(input_paths, dataset_names=None):
+#     if dataset_names is not None: # is directory
+#             assert len(input_path) == len(dataset_names), "Number of provided dataset names must equal to input path"
+#     for input_path in input_paths:
+#     if os.path.isdir(input_path):
+#         if dataset_names is not None: # is directory
+#             assert len(input_path) == len(dataset_names), "Number of provided dataset names must equal to input path"
+#             dataset_names = [dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i]) 
+#                              for i, dataset_name in enumerate(dataset_names)]
+#         else:
+#             dataset_names = map(get_default_dataset_name, input_path)
+
+#         filelist = map(get_filelist, input_path)
+#         return dict(zip(dataset_names, filelist))
+#     elif os.path.isfile(input_path): # is file
+#         if input_path.endswith("txt"):
+#             with open(input_path):
+                
+            
+#         elif input_path.endswith("json"):
+#         else:
+#             raise ValueError("Only txt and json are supported!")
+#     else:
+#         raise ValueError("input_path is invalid (neither director nor file). It might not exist.")
 
 def build_processor_config(processor_class, configs, args):
     processor_config = dict()
