@@ -36,13 +36,14 @@ def remove_badfiles(fileset):
     print("="*50)
     print("checking bad files")
     for dataset in fileset:
+        badcounts = 0
+        filecounts = len(fileset[dataset])
         for filename in fileset[dataset]:
-            badcounts = 0
             if "Events" not in uproot.open(filename).keys():
                 #print("remove file: {} from dataset {}".format(filename, dataset))
                 fileset[dataset].remove(filename)
                 badcounts += 1
-        print("remove {} bad files of {} files from dataset {}".format(badcounts, len(fileset[dataset]), dataset))
+        print("remove {} bad files of {} files from dataset {}".format(badcounts, filecounts, dataset))
     print("="*50)
     
 def build_fileset(data_dir, dataset_names=None):
