@@ -70,8 +70,8 @@ def build_fileset(input_paths, dataset_names=None):
             fileset[dataset_name] = filelist
         elif os.path.isfile(input_path): # is file
             if input_path.endswith("txt"):
-                  with open(filename) as file:
-                        filelist = [line.rstrip() for line in file]
+                with open(filename) as file:
+                    filelist = [line.rstrip() for line in file]
                 dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[i])
                 fileset[dataset_name] = filelist
             elif not input_path.endswith("json"): # will need to fix for json
