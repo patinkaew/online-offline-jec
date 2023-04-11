@@ -65,8 +65,8 @@ def build_fileset(input_paths, dataset_names=None):
     fileset = dict()
     for input_path in input_paths:
         if os.path.isdir(input_path):
-                dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i])
-                filelist = map(get_filelist, input_path)
+            dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i])
+            filelist = get_filelist(input_path)
             fileset[dataset_name] = filelist
         elif os.path.isfile(input_path): # is file
             if input_path.endswith("txt"):
