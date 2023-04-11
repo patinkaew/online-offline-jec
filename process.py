@@ -181,10 +181,10 @@ if __name__ == "__main__":
     fileset_json_filename = args.out_file + "_fileset.json"
     with open(fileset_json_filename , "w") as file:
         json.dump(fileset, file, indent=4)
-#     max_file = 1 # for testing
-#     if max_file is not None:
-#         for dataset in fileset:
-#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
+    max_file = 1 # for testing
+    if max_file is not None:
+        for dataset in fileset:
+            fileset[dataset] = sorted(fileset[dataset])[:max_file]
     print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
