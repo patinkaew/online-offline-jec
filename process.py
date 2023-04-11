@@ -39,10 +39,11 @@ def remove_badfiles(fileset):
         badcounts = 0
         filecounts = len(fileset[dataset])
         for filename in fileset[dataset]:
-            if "Events" not in uproot.open(filename).keys():
-                #print("remove file: {} from dataset {}".format(filename, dataset))
-                fileset[dataset].remove(filename)
-                badcounts += 1
+            with uproot.open(filename) as f:
+                if "Events" not in f.keys():
+                    #print("remove file: {} from dataset {}".format(filename, dataset))
+                    fileset[dataset].remove(filename)
+                    badcounts += 1
         print("remove {} bad files of {} files from dataset {}".format(badcounts, filecounts, dataset))
     print("="*50)
     
