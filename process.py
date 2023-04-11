@@ -63,16 +63,17 @@ def build_fileset(input_paths, dataset_names=None):
     if dataset_names is not None: # is directory
         assert len(input_paths) == len(dataset_names), "Number of provided dataset names must equal to input path"
     fileset = dict()
-    for input_path in input_paths:
+    dataset_name = "ScoutingPFMonitor"
+    for i, input_path in enumerate(input_paths):
         if os.path.isdir(input_path):
-            dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i])
+            #dataset_name = dataset_names[i] if dataset_names[i] != "*" else get_default_dataset_name(input_path)
             filelist = get_filelist(input_path)
             fileset[dataset_name] = filelist
         elif os.path.isfile(input_path): # is file
             if input_path.endswith("txt"):
                 with open(filename) as file:
                     filelist = [line.rstrip() for line in file]
-                dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[i])
+                #dataset_name = dataset_name if dataset_names[] != "*" else get_default_dataset_name(filelist[0])
                 fileset[dataset_name] = filelist
             elif not input_path.endswith("json"): # will need to fix for json
                 raise ValueError("Only txt and json are supported!")
