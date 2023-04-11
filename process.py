@@ -47,42 +47,38 @@ def remove_badfiles(fileset):
         print("remove {} bad files of {} files from dataset {}".format(badcounts, filecounts, dataset))
     print("="*50)
     
-def build_fileset(data_dir, dataset_names=None):
-    if dataset_names is not None:
-        assert len(data_dir) == len(dataset_names)
-        dataset_names = [dataset_name if dataset_name != "*" else get_default_dataset_name(data_dir[i]) 
-                         for i, dataset_name in enumerate(dataset_names)]
-    else:
-        dataset_names = map(get_default_dataset_name, data_dir)
+# def build_fileset(data_dir, dataset_names=None):
+#     if dataset_names is not None:
+#         assert len(data_dir) == len(dataset_names)
+#         dataset_names = [dataset_name if dataset_name != "*" else get_default_dataset_name(data_dir[i]) 
+#                          for i, dataset_name in enumerate(dataset_names)]
+#     else:
+#         dataset_names = map(get_default_dataset_name, data_dir)
     
-    filelist = map(get_filelist, data_dir)
-    return dict(zip(dataset_names, filelist))
+#     filelist = map(get_filelist, data_dir)
+#     return dict(zip(dataset_names, filelist))
 
 # work in progress
-# def build_fileset(input_paths, dataset_names=None):
-#     if dataset_names is not None: # is directory
-#             assert len(input_path) == len(dataset_names), "Number of provided dataset names must equal to input path"
-#     for input_path in input_paths:
-#     if os.path.isdir(input_path):
-#         if dataset_names is not None: # is directory
-#             assert len(input_path) == len(dataset_names), "Number of provided dataset names must equal to input path"
-#             dataset_names = [dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i]) 
-#                              for i, dataset_name in enumerate(dataset_names)]
-#         else:
-#             dataset_names = map(get_default_dataset_name, input_path)
-
-#         filelist = map(get_filelist, input_path)
-#         return dict(zip(dataset_names, filelist))
-#     elif os.path.isfile(input_path): # is file
-#         if input_path.endswith("txt"):
-#             with open(input_path):
-                
-            
-#         elif input_path.endswith("json"):
-#         else:
-#             raise ValueError("Only txt and json are supported!")
-#     else:
-#         raise ValueError("input_path is invalid (neither director nor file). It might not exist.")
+def build_fileset(input_paths, dataset_names=None):
+    if dataset_names is not None: # is directory
+        assert len(input_paths) == len(dataset_names), "Number of provided dataset names must equal to input path"
+    fileset = dict()
+    for input_path in input_paths:
+        if os.path.isdir(input_path):
+                dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(input_path[i])
+                filelist = map(get_filelist, input_path)
+            fileset[dataset_name] = filelist
+        elif os.path.isfile(input_path): # is file
+            if input_path.endswith("txt"):
+                  with open(filename) as file:
+                        filelist = [line.rstrip() for line in file]
+                dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[i])
+                fileset[dataset_name] = filelist
+            elif not input_path.endswith("json"): # will need to fix for json
+                raise ValueError("Only txt and json are supported!")
+        else:
+            raise ValueError("input_path is invalid (neither director nor file). It might not exist.")
+    return fileset
 
 def build_processor_config(processor_class, configs, args):
     processor_config = dict()
@@ -178,6 +174,9 @@ if __name__ == "__main__":
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
     remove_badfiles(fileset)
+    fileset_json_filename = arg.out_file + "_fileset.json"
+    with open(fileset_json_filename , "w") as file:
+        json.dump(fileset, file, indent=4)
 #     max_file = 1 # for testing
 #     if max_file is not None:
 #         for dataset in fileset:
@@ -310,7 +309,7 @@ if __name__ == "__main__":
                 'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
         
-        transfer_input_filelist = list()
+        transfer_input_filelist = [fileset_json_filename]
         path_proccessor_configs = [_ for _ in processor_config.keys() if _.endswith("path") or _.endswith("filelist")]
         for config in path_proccessor_configs:
             if processor_config[config] != None:
@@ -391,5 +390,5 @@ if __name__ == "__main__":
                                     )
 
                 # processing
-                processing(args, configs, runner, fileset, treename="Events", 
+                processing(args, configs, runner, fileset_json_filename, treename="Events", 
                            processor_instance=OHProcessor(**processor_config))
