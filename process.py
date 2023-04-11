@@ -75,7 +75,10 @@ def build_fileset(input_paths, dataset_names=None):
                     filelist = [line.rstrip() for line in file]
                 #dataset_name = dataset_name if dataset_names[] != "*" else get_default_dataset_name(filelist[0])
                 fileset[dataset_name] = filelist
-            elif not input_path.endswith("json"): # will need to fix for json
+            elif input_path.endswith("json"):
+                if len(input_paths) == 1:
+                    return input_path
+            else:
                 raise ValueError("Only txt and json are supported!")
         else:
             raise ValueError("input_path is invalid (neither director nor file). It might not exist.")
@@ -175,7 +178,7 @@ if __name__ == "__main__":
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
     remove_badfiles(fileset)
-    fileset_json_filename = arg.out_file + "_fileset.json"
+    fileset_json_filename = args.out_file + "_fileset.json"
     with open(fileset_json_filename , "w") as file:
         json.dump(fileset, file, indent=4)
 #     max_file = 1 # for testing
