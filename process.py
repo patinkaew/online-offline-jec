@@ -9,7 +9,7 @@ import sys
 import os
 import inspect
 
-from coffea import processor
+from coffea import processor  
 from coffea import util as cutil
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
@@ -20,12 +20,19 @@ from util import *
 import warnings
 import time
 
-def get_default_dataset_name(data_dir):
-    end_index = data_dir.rfind("/")
-    if end_index +1 == len(data_dir):
-        end_index = data_dir[:-1].rfind("/")
-    start_index = data_dir[:end_index].rfind("/")
-    return data_dir[start_index+1: end_index]
+# def get_default_dataset_name(data_dir):
+#     end_index = data_dir.rfind("/")
+#     if end_index +1 == len(data_dir):
+#         end_index = data_dir[:-1].rfind("/")
+#     start_index = data_dir[:end_index].rfind("/")
+#     return data_dir[start_index+1: end_index]
+
+def get_default_dataset_name(filename):
+    # expect file format as /path_to_dataset/dataset/run/batch/job/_.root
+    tokens = filename.split("/")
+    if filename.endswith("/"):
+        return tokens[-6]
+    return tokens[-5]
     
 def get_filelist(data_dir):
     filelist = glob.glob(os.path.join(data_dir, "*/*/*.root"))
@@ -42,7 +49,7 @@ def remove_badfiles(fileset):
         filecounts = len(fileset[dataset])
         for filename in fileset[dataset]:
             with uproot.open(filename) as f:
-                if "Events" in f.keys():
+                if len(f.keys()) > 0:
                     #print("remove file: {} from dataset {}".format(filename, dataset))
                     good_fileset[dataset].append(filename)
                 else:
@@ -66,22 +73,26 @@ def remove_badfiles(fileset):
 def build_fileset(input_paths, dataset_names=None):
     if dataset_names is not None: # is directory
         assert len(input_paths) == len(dataset_names), "Number of provided dataset names must equal to input path"
-    fileset = dict()
-    dataset_name = "ScoutingPFMonitor"
+    else:
+        dataset_names = ["*"] * len(input_paths)
+        
+    fileset = defaultdict(list)
     for i, input_path in enumerate(input_paths):
         if os.path.isdir(input_path):
-            #dataset_name = dataset_names[i] if dataset_names[i] != "*" else get_default_dataset_name(input_path)
+            dataset_name = dataset_names[i] if dataset_names[i] != "*" else get_default_dataset_name(filelist[0])
             filelist = get_filelist(input_path)
-            fileset[dataset_name] = filelist
+            fileset[dataset_name] += filelist
         elif os.path.isfile(input_path): # is file
             if input_path.endswith("txt"):
                 with open(filename) as file:
                     filelist = [line.rstrip() for line in file]
-                #dataset_name = dataset_name if dataset_names[] != "*" else get_default_dataset_name(filelist[0])
+                dataset_name = dataset_name if dataset_names[] != "*" else get_default_dataset_name(filelist[0])
                 fileset[dataset_name] = filelist
             elif input_path.endswith("json"):
                 if len(input_paths) == 1:
                     return input_path
+                else: # merge dict
+                    pass
             else:
                 raise ValueError("Only txt and json are supported!")
         else:
