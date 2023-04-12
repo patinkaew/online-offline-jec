@@ -42,8 +42,8 @@ def json2dict(filename):
     return dictionary
 
 def dict2json(dictionary, filename, indent=4):
-    with open(filename, "w") as file
-        json.dump(dictionary, filename, indent=indent)
+    with open(filename, "w") as file:
+        json.dump(dictionary, file, indent=indent)
     return filename
     
 class NpEncoder(json.JSONEncoder):
