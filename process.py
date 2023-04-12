@@ -4,6 +4,7 @@ import glob
 import json
 import datetime
 from functools import partial
+from collections import defaultdict
 import sys
 import os
 import inspect
@@ -35,17 +36,20 @@ def get_filelist(data_dir):
 def remove_badfiles(fileset):
     print("="*50)
     print("checking bad files")
+    good_fileset = defaultdict(list)
     for dataset in fileset:
         badcounts = 0
         filecounts = len(fileset[dataset])
         for filename in fileset[dataset]:
             with uproot.open(filename) as f:
-                if "Events" not in f.keys():
+                if "Events" in f.keys():
                     #print("remove file: {} from dataset {}".format(filename, dataset))
-                    fileset[dataset].remove(filename)
+                    good_fileset[dataset].append(filename)
+                else:
                     badcounts += 1
         print("remove {} bad files of {} files from dataset {}".format(badcounts, filecounts, dataset))
     print("="*50)
+    return good_fileset
     
 # def build_fileset(data_dir, dataset_names=None):
 #     if dataset_names is not None:
@@ -177,15 +181,17 @@ if __name__ == "__main__":
     
     # build fileset
     fileset = build_fileset(args.input_dir, args.dataset_name)
-    remove_badfiles(fileset)
+    fileset = remove_badfiles(fileset)
+    
+#     max_file = 1 # for testing
+#     if max_file is not None:
+#         for dataset in fileset:
+#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
+#     print_num_inputfiles(fileset)
+    
     fileset_json_filename = args.out_file + "_fileset.json"
     with open(fileset_json_filename , "w") as file:
         json.dump(fileset, file, indent=4)
-    max_file = 1 # for testing
-    if max_file is not None:
-        for dataset in fileset:
-            fileset[dataset] = sorted(fileset[dataset])[:max_file]
-    print_num_inputfiles(fileset)
     
 #     p = OHProcessor(**processor_config)
 #     exit()
