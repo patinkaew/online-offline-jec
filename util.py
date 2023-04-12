@@ -36,6 +36,16 @@ def extract_filename(path, remove_format=True):
     else:
         return path[:end_idx]
     
+def json2dict(filename):
+    with open(filename) as file:
+        dictionary = json.load(file)
+    return dictionary
+
+def dict2json(dictionary, filename, indent=4):
+    with open(filename, "w") as file
+        json.dump(dictionary, filename, indent=indent)
+    return filename
+    
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
