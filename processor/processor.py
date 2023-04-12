@@ -257,12 +257,12 @@ class OHProcessor(processor.ProcessorABC):
         dataset = events.metadata.get("dataset", "untitled")
         
         # if there is no TrigObjJMEAK{4, 8}, but there is TrigObj
-        if "TrigObjJMEAK4" in [self.on_jet_name, self.off_jet_name]
+        if "TrigObjJMEAK4" in [self.on_jet_name, self.off_jet_name]:
             if "TrigObjJMEAK4" not in events.fields:
                 events["TrigObjJMEAK4"] = events["TrigObj"][events["TrigObj"].id == 1] # Jet = 1
                 if self.verbose > 0:
                     warning.warn("Retrieving TrigObjJMEAK4 from TrigObj with id = 1")
-        if "TrigObjJMEAK8" in [self.on_jet_name, self.off_jet_name]
+        if "TrigObjJMEAK8" in [self.on_jet_name, self.off_jet_name]:
             if "TrigObjJMEAK8" not in events.fields:
                 events["TrigObjJMEAK8"] = events["TrigObj"][events["TrigObj"].id == 6] # FatJet = 6
                 if self.verbose > 0:
