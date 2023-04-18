@@ -475,7 +475,7 @@ class OHProcessor(processor.ProcessorABC):
             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
             cmp_jet_types = [self.off_jet_label]
-            if (not self.is_data_ and self.fill_gen:
+            if (not self.is_data) and self.fill_gen:
                 cmp_jet_types += [self.off_jet_label + " (Matched Gen)"]
                 
             cmp_jet_type_axis = hist.axis.StrCategory(cmp_jet_types, name="jet_type", label="Types of Jet", growth=False)
