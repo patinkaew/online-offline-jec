@@ -35,7 +35,7 @@ class OHProcessor(processor.ProcessorABC):
                  
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
-                 #first_PV="PV", second_PV="None", # event_level, match PV from two reconstruction
+                 first_PV="PV", second_PV=None, # event_level, match PV from two reconstruction types
                  min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
                  MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
                  max_MET_sumET=None, min_MET=45, 
@@ -115,7 +115,7 @@ class OHProcessor(processor.ProcessorABC):
         self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
         
         # main PV matching
-        #self.close_pv_z = ClosePV_z(first_PV, second_PV, sigma_multiple=5) # max_dz=0.2
+        self.close_pv_z = ClosePV_z(first_PV, second_PV, sigma_multiple=5) # max_dz=0.2
         
         # minimum number of jets
         # if tag and probe will be applied, need at least 2
@@ -474,7 +474,10 @@ class OHProcessor(processor.ProcessorABC):
                                               name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
-            cmp_jet_types = [self.off_jet_label, self.off_jet_label + " (Matched Gen)"]
+            cmp_jet_types = [self.off_jet_label]
+            if (not self.is_data_ and self.fill_gen:
+                cmp_jet_types += [self.off_jet_label + " (Matched Gen)"]
+                
             cmp_jet_type_axis = hist.axis.StrCategory(cmp_jet_types, name="jet_type", label="Types of Jet", growth=False)
             out["comparison"] = hist.Hist(dataset_axis, correction_level_axis, cmp_jet_type_axis, jet_eta_axis, jet_phi_axis,
                                           off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
