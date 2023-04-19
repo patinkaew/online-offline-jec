@@ -322,7 +322,7 @@ class OHProcessor(processor.ProcessorABC):
         events = self.flag_filters(events, cutflow)
         
         # PV matching
-        #events = self.close_pv_z(events, cutflow)
+        events = self.close_pv_z(events, cutflow)
         
         # MET cuts
         events = self.max_MET(events, cutflow)
