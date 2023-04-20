@@ -189,6 +189,11 @@ def processing(configs, runner, fileset, processor_instance, treename="Events"):
     #mkdir_if_not_exist(os.path.dirname(args.out_file))
     print("="*50)
     start_time = datetime.datetime.now()
+    print(configs)
+    print(runner)
+    print(fileset)
+    print(processor_instance)
+    print(treename)
     out = runner(fileset, treename=treename, processor_instance=processor_instance)
     end_time = datetime.datetime.now()
     elapsed_time = end_time-start_time
