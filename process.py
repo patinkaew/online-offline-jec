@@ -142,7 +142,7 @@ def build_fileset(input_paths, dataset_names=None,
     if xrootd_redirector: 
         for dataset in fileset:
             # remove path before /store (e.g. /eos/cms) and prepend xrootd redirector
-            fileset[dataset] = [os.path.join(xrootd_redirector, filename[filename.find("/store"):]) for filename in fileset[dataset]]        
+            fileset[dataset] = [xrootd_redirector + filename[filename.find("/store"):] for filename in fileset[dataset]]        
         # save to fileset_redirector.json
         json_output_path = get_json_output_path("fileset_redirector.json")
         dict2json(fileset, json_output_path)
@@ -189,11 +189,6 @@ def processing(configs, runner, fileset, processor_instance, treename="Events"):
     #mkdir_if_not_exist(os.path.dirname(args.out_file))
     print("="*50)
     start_time = datetime.datetime.now()
-    print(configs)
-    print(runner)
-    print(fileset)
-    print(processor_instance)
-    print(treename)
     out = runner(fileset, treename=treename, processor_instance=processor_instance)
     end_time = datetime.datetime.now()
     elapsed_time = end_time-start_time
