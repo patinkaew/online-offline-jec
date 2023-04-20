@@ -83,7 +83,8 @@ def build_fileset(input_paths, dataset_names=None,
         dataset_names = ["*"] * len(input_paths)
     
     # configure json output
-    def get_json_output_path(suffix, output_dir):
+    def get_json_output_path(suffix):
+        nonlocal output_dir
         json_output_path = suffix # default to save in current working directory
         if output_dir:
             if output_dir.endswith("/"): # remove / if exist at the end
@@ -91,7 +92,7 @@ def build_fileset(input_paths, dataset_names=None,
             json_output_filename = os.path.basename(output_dir) + "_" + suffix
             json_output_path = os.path.join(output_dir, json_output_filename)
         return json_output_path
-    json_output_path = get_json_output_path("fileset.json", output_dir)
+    json_output_path = get_json_output_path("fileset.json")
     
     # already good, just copy json to output folder
     if (len(input_paths) == 1) and (input_paths[0].endswith(".json")) \
