@@ -4,13 +4,14 @@ import string
 import re
 import json
 import inspect
+import configparser
 
 import numpy as np
 import uproot
 import awkward as ak
 import hist
 
-def mkdir_if_not_exists(path):
+def mkdir_if_not_exist(path):
     if (len(path) > 0) and (not os.path.exists(path)):
         os.makedirs(path)
         
@@ -75,7 +76,35 @@ def create_default_config_file(processor_class, config_file):
         f.write("num_workers = 1\n")
         f.write("chunksize = 100_000\n")
         f.write("maxchunks = None")
-    
+        
+# update config file to contain new required fields with default values
+def update_config_file(default_config_dict, config_file, replace=False):
+    new_configs = configparser.ConfigParser()
+    # config file does not exist, create new with default values
+    if not os.path.exists(config_file): 
+        for section in default_config_dict.keys():
+            new_configs[section] = {}
+            for name, default_value in default_config_dict[section]:
+                new_configs[section][name] = str(default_value)              
+    # config file exists, update to contain new required fields with default values
+    else:
+        if not replace:
+            shutil.copy(config_file, os.path.splitext(config_file)[0] + "_orig.cfg") # save original
+
+        orig_configs = configparser.ConfigParser()
+        orig_configs.read(config_file)
+
+        for section in default_config_dict.keys():
+                new_configs[section] = {}
+                for name, default_value in default_config_dict[section]:
+                    if section in orig_configs.keys():
+                        value = orig_configs[section].get(name, default_value)
+                    else:
+                        value = default_value
+                    new_configs[section][name] = str(value)
+    with open(config_file, "w") as f:
+        new_configs.write(f)
+        
 # functions for manipulating trigger flags
 # def find_available_trigger_flags(events, flag_prefix="PFJet"):
 #     return [flag for flag in events["HLT"].fields if re.match("{}\d+".format(flag_prefix), flag)]
