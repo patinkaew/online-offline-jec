@@ -75,9 +75,9 @@ def build_fileset(input_paths, dataset_names=None,
                   xrootd_redirector=None, output_dir=None):
     # prepare dataset names
     input_paths = input_paths.split(",")
-    dataset_names = dataset_names.split(",")
     
     if dataset_names is not None: # is directory
+        dataset_names = dataset_names.split(",")
         assert len(input_paths) == len(dataset_names), "Number of provided dataset names ({}) must equal to input paths {}".format(len(dataset_names), len(input_paths))
     else:
         dataset_names = ["*"] * len(input_paths)
