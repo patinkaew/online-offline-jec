@@ -35,7 +35,7 @@ class OHProcessor(processor.ProcessorABC):
                  
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
-                 first_PV="PV", second_PV=None, # event_level, match PV from two reconstruction types
+                 off_PV="PV", on_PV=None, # event_level, match PV from two reconstruction types
                  min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
                  MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
                  max_MET_sumET=None, min_MET=45, 
@@ -115,7 +115,7 @@ class OHProcessor(processor.ProcessorABC):
         self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
         
         # main PV matching
-        self.close_pv_z = ClosePV_z(first_PV, second_PV, sigma_multiple=5) # max_dz=0.2
+        self.close_pv_z = ClosePV_z(off_PV, on_PV, sigma_multiple=5) # max_dz=0.2
         
         # minimum number of jets
         # if tag and probe will be applied, need at least 2
