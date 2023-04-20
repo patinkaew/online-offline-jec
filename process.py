@@ -7,6 +7,7 @@ from functools import partial
 from collections import defaultdict
 import sys
 import os
+import shutil
 import inspect
 
 from coffea import processor  
@@ -69,13 +70,38 @@ def remove_badfiles(fileset):
 #     filelist = map(get_filelist, data_dir)
 #     return dict(zip(dataset_names, filelist))
 
-# work in progress
-def build_fileset(input_paths, dataset_names=None):
+def build_fileset(input_paths, dataset_names=None, 
+                  check_bad_files=False, max_files = None, 
+                  xrootd_redirector=None, output_dir=None):
+    # prepare dataset names
+    input_paths = input_paths.split(",")
+    dataset_names = dataset_names.split(",")
+    
     if dataset_names is not None: # is directory
-        assert len(input_paths) == len(dataset_names), "Number of provided dataset names must equal to input path"
+        assert len(input_paths) == len(dataset_names), "Number of provided dataset names ({}) must equal to input paths {}".format(len(dataset_names), len(input_paths))
     else:
         dataset_names = ["*"] * len(input_paths)
+    
+    # configure json output
+    def get_json_output_path(suffix, output_dir):
+        json_output_path = suffix # default to save in current working directory
+        if output_dir:
+            if output_dir.endswith("/"): # remove / if exist at the end
+                output_dir = output_dir[:-1]
+            json_output_filename = os.path.basename(output_dir) + "_" + suffix
+            json_output_path = os.path.join(output_dir, json_output_filename)
+        return json_output_path
+    json_output_path = get_json_output_path("fileset.json", output_dir)
+    
+    # already good, just copy json to output folder
+    if (len(input_paths) == 1) and (input_paths[0].endswith(".json")) \
+        and (not check_bad_files) and (max_files is None)\
+        and (xrootd_redirector is None):
         
+        shutil.copy(input_paths[0], json_output_path)
+        return json_output_path
+    
+    # need some processing
     fileset = defaultdict(list)
     for i in range(len(input_paths)):
         input_path = input_paths[i]
@@ -86,21 +112,41 @@ def build_fileset(input_paths, dataset_names=None):
             filelist = get_filelist(input_path)
             fileset[dataset_name] += filelist
         elif os.path.isfile(input_path): # is file
-            if input_path.endswith("txt"):
+            if input_path.endswith(".txt"):
                 with open(filename) as file:
                     filelist = [line.rstrip() for line in file]
                 dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[0])
-                fileset[dataset_name] = filelist
-            elif input_path.endswith("json"):
-                if len(input_paths) == 1:
-                    return input_path
-                else: # merge dict
-                    pass
+                fileset[dataset_name] += filelist
+            elif input_path.endswith(".json"):
+                for dataset_name, filelist in json2dict(input_path).items():
+                    fileset[dataset_name] += filelist
             else:
                 raise ValueError("Only txt and json are supported!")
         else:
-            raise ValueError("input_path is invalid (neither director nor file). It might not exist.")
-    return fileset
+            raise ValueError("input_path {} is invalid (neither director nor file). It might not exist.".format(input_path))
+            
+    # check that files can be open with uproot and contain at least one keys
+    if check_bad_files:
+        fileset = remove_badfiles(fileset)
+    
+    # truncated number of files, default to include all
+    if max_files:
+        for dataset in fileset:
+            fileset[dataset] = fileset[dataset][:max_files]
+        
+    # save to fileset.json
+    dict2json(fileset, json_output_path)
+    
+    # add redirector if any
+    if xrootd_redirector: 
+        for dataset in fileset:
+            # remove path before /store (e.g. /eos/cms) and prepend xrootd redirector
+            fileset[dataset] = [os.path.join(xrootd_redirector, filename[filename.find("/store"):]) for filename in fileset[dataset]]        
+        # save to fileset_redirector.json
+        json_output_path = get_json_output_path("fileset_redirector.json")
+        dict2json(fileset, json_output_path)
+    
+    return json_output_path
 
 def build_processor_config(processor_class, configs, args):
     processor_config = dict()
@@ -135,11 +181,11 @@ def print_num_inputfiles(fileset):
     print("Total : {}".format(sum(map(len, fileset.values()))))
     print("="*50)
             
-def processing(args, configs, runner, fileset, processor_instance, treename="Events"):
+def processing(configs, runner, fileset, processor_instance, treename="Events"):
     print("="*50)
     print("Begin Processing")
-    print("(Save file: {})".format(args.out_file))
-    mkdir_if_not_exists(os.path.dirname(args.out_file))
+    print("(Save file: {})".format(configs["IO"]["output_file"]))
+    #mkdir_if_not_exist(os.path.dirname(args.out_file))
     print("="*50)
     start_time = datetime.datetime.now()
     out = runner(fileset, treename=treename, processor_instance=processor_instance)
@@ -158,30 +204,90 @@ def processing(args, configs, runner, fileset, processor_instance, treename="Eve
     out["process_time"] = elapsed_time
     print("="*50)
 
-    print("Save to Output file: {}".format(args.out_file))
-    cutil.save(out, args.out_file)
+    print("Save to Output file: {}".format(configs["IO"]["output_file"]))
+    cutil.save(out, configs["IO"]["output_file"])
     print("All Complete!")
 
+# xrootdstr xrootd redirector
+#xrootdstr = "root://xrootd-cms.infn.it//" # for Europe and Asia
+#xrootdstr = "root://cmsxrootd.fnal.gov//" # for America
+#xrootdstr = "root://xcache/" # for coffea.casa
+#xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
+
+#     job flavor
+#     espresso     = 20 minutes
+#     microcentury = 1 hour
+#     longlunch    = 2 hours
+#     workday      = 8 hours
+#     tomorrow     = 1 day
+#     testmatch    = 3 days
+#     nextweek     = 1 week
+
+io_default_config = [("input_paths", ""),
+                     ("dataset_names", None),
+                     ("check_bad_files", False),
+                     ("max_files", None),
+                     ("xrootd_redirector", None),
+                     ("base_output_dir", "")
+                    ]
+
+runner_default_config = [("executor", "iterative"),
+                         ("num_workers", 1),
+                         ("chunksize", 100_000),
+                         ("maxchunks", None),
+                         ("compression", None),
+                         #("proxy_path", "/tmp/x509up_u{}".format(os.getuid())), # default in voms-proxy-init
+                         ("proxy_path", os.path.join(os.path.expanduser("~"), "private/gridproxy.pem")),
+                         #("proxy_path", "/afs/cern.ch/user/p/pinkaew/private/gridproxy.pem"),
+                         ("port_number", 8786),
+                         ("log_directory", "/eos/user/{}/{}/condor/log".format(os.path.join(os.getlogin())[0], os.path.join(os.getlogin()))),
+                         ("job_flavour", "workday"),
+                         ("min_jobs", 2),
+                         ("max_jobs", 64),
+                         ("batch_name", "dask-worker")
+                        ]
 
 if __name__ == "__main__":
     # parsing arguments and configurations
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, nargs="+", required=True)
-    parser.add_argument("--dataset_name", type=str, nargs="+", required=False)
-    parser.add_argument("--out_file", type=str, required=True)
-    parser.add_argument("--config_file", type=str, required=True)
-    parser.add_argument("--trigger_type", type=str, required=False)
-    parser.add_argument("--trigger_min_pt", type=float, required=False)
-    parser.add_argument('--off_jet_tag_probe', action=argparse.BooleanOptionalAction, required=False)
-    parser.add_argument('--on_jet_tag_probe', action=argparse.BooleanOptionalAction, required=False)
-    parser.add_argument("--off_jet_tag_min_pt", type=float, required=False)
-    parser.add_argument("--on_jet_tag_min_pt", type=float, required=False)
+    parser.add_argument("-c", "--config_file", type=str, required=True)
+    
+     #will not allow replacing args -> configs anymore
+#     parser.add_argument("--input_paths", type=str, nargs="+", required=False)
+#     parser.add_argument("--dataset_names", type=str, nargs="+", required=False)
+#     parser.add_argument("--out_dir", type=str, required=False)
+#     parser.add_argument("--trigger_type", type=str, required=False)
+#     parser.add_argument("--trigger_min_pt", type=float, required=False)
+#     parser.add_argument('--off_jet_tag_probe', action=argparse.BooleanOptionalAction, required=False)
+#     parser.add_argument('--on_jet_tag_probe', action=argparse.BooleanOptionalAction, required=False)
+#     parser.add_argument("--off_jet_tag_min_pt", type=float, required=False)
+#     parser.add_argument("--on_jet_tag_min_pt", type=float, required=False)
+    
+    # new version will have everything in config file (.cfg)
+    # {dataset id}_{run, QCD}_offline_online_configname.cfg
     
     args = parser.parse_args()
     print_dict_json(vars(args), title="Arguments")
     
+    assert os.path.exists(args.config_file), "config file: {} does not exist!".format(args.config_file)
     configs = configparser.ConfigParser()
     configs.read(args.config_file)
+    
+    #  add output_dir and output_file
+    config_filename = os.path.splitext(os.path.basename(args.config_file))[0]
+    configs["IO"]["output_dir"] = os.path.join(configs["IO"]["base_output_dir"], config_filename)
+    mkdir_if_not_exist(configs["IO"]["output_dir"])
+    shutil.copy(args.config_file, configs["IO"]["output_dir"]) # copy config file over
+    configs["IO"]["output_file"] = os.path.join(configs["IO"]["output_dir"], config_filename + ".coffea")
+    
+    # build fileset
+    build_fileset_args = dict()
+    for parameter in inspect.signature(build_fileset).parameters.values():
+        try:
+            build_fileset_args[parameter.name] = eval(configs["IO"].get(parameter.name))
+        except:
+            build_fileset_args[parameter.name] = configs["IO"].get(parameter.name)
+    fileset_json_path = build_fileset(**build_fileset_args)
     
     print("="*50)
     print("Process configuration to processor (Priority args > configs)")
@@ -193,89 +299,26 @@ if __name__ == "__main__":
     configs._sections["Processor"]["on_jet_weight_filelist"] = eval(configs._sections["Processor"]["on_jet_weight_filelist"])
     print_dict_json(configs._sections, title="Configurations")
     
-    # build fileset
-    fileset = build_fileset(args.input_dir, args.dataset_name)
-    fileset = remove_badfiles(fileset)
-    
-#     max_file = 1 # for testing
-#     if max_file is not None:
-#         for dataset in fileset:
-#             fileset[dataset] = sorted(fileset[dataset])[:max_file]
-#     print_num_inputfiles(fileset)
-    
-    fileset_json_filename = args.out_file + "_fileset.json"
-    with open(fileset_json_filename , "w") as file:
-        json.dump(fileset, file, indent=4)
-    
-#     p = OHProcessor(**processor_config)
-#     exit()
-#     data_dir = "/data/data/JME_NANO_DATA/2022/JMENanoRun3_v2p1_Run2022D-PromptReco-v2/JetMET/220915_173253/0000/"
-#     fname = "tree_155.root"
-#     events_data = NanoEventsFactory.from_root(
-#                 os.path.join(data_dir, fname), 
-#                 schemaclass=JMENanoAODSchema,
-#                 metadata={"dataset": "test"}
-#                 ).events()
-#     mc_dir = "/data/data/JME_NANO_MC/2022/QCD_Pt-15to7000_TuneCP5_Flat_13p6TeV_pythia8/JMENanoRun3_v2p1_MC22_122/220915_171347/0000/"
-#     mc_fname = "tree_1.root"
-#     events_mc = NanoEventsFactory.from_root(
-#             os.path.join(mc_dir, mc_fname), 
-#             schemaclass=JMENanoAODSchema,
-#             metadata={"dataset": "tree_1"}
-#             ).events()
-#     num_trial = 1
-#     print("trying data")
-#     for trial in range(num_trial):
-#         print("Data {}".format(trial))
-#         data_dir = "/data/data/JME_NANO_DATA/2022/JMENanoRun3_v2p1_Run2022D-PromptReco-v2/JetMET/220915_173253/0000/"
-#         fname = "tree_{}.root".format(num_trial)
-#         #data_dir = "/data/data/ScoutingJMENano/ScoutingPFMonitor/Run3Summer22/230207_113750/0000/"
-#         #fname = "jmenano_data_145.root"
-#         last_time = time.time()
-#         events_data = NanoEventsFactory.from_root(
-#                 os.path.join(data_dir, fname), 
-#                 schemaclass=ScoutingJMENanoAODSchema,
-#                 metadata={"dataset": fname}
-#                 ).events()
-#         #print(sorted(events_data.fields))
-#         read_time = time.time() - last_time
-#         out = p.process(events_data)
-#         out["time_pf"]["reading"] += read_time
-#         print_dict_json(out.get("time_pf", dict()), title="Time profile")
-#         print_dict_json(out.get("cutflow", dict()), title="Cutflow")
-
-#     print("trying mc")
-#     for trial in range(num_trial):
-#         print("MC {}".format(trial))
-#         mc_dir = "/data/data/JME_NANO_MC/2022/QCD_Pt-15to7000_TuneCP5_Flat_13p6TeV_pythia8/JMENanoRun3_v2p1_MC22_122/220915_171347/0000/"
-#         mc_fname = "tree_{}.root".format(num_trial)
-#         #mc_dir = "/data/data/ScoutingJMENano/QCD_Pt-15To7000_TuneCP5_13p6TeV_pythia8/Run3Summer22/230130_122950/0000/"
-#         #mc_fname = "nanoaod_10.root"
-#         last_time = time.time()
-#         events_mc = NanoEventsFactory.from_root(
-#             os.path.join(mc_dir, mc_fname), 
-#             schemaclass=ScoutingJMENanoAODSchema,
-#             metadata={"dataset": mc_fname}
-#             ).events()
-#         read_time = time.time() - last_time
-#         out = p.process(events_mc)
-#         out["time_pf"]["reading"] += read_time
-#         print_dict_json(out.get("time_pf", dict()), title="Time profile")
-#         print_dict_json(out.get("cutflow", dict()), title="Cutflow")
-#     exit()
-
     # prepare runner
     print("Prepare Runner")
-    executor_type = configs["Runner"].get("executor", "iterative")
+    runner_default_config_dict = dict(runner_default_config)
+    def get_runner_config(field):
+        try:
+            value = eval(configs["Runner"].get(field, runner_default_config_dict[field]))
+        except:
+            value = configs["Runner"].get(field, runner_default_config_dict[field])
+        return value
+        
+    executor_type = get_runner_config("executor")
     assert executor_type.lower() in ["iterative", "future", "dask"], "unrecongized executor: {}".format(executor_type)
     executor_type = executor_type.lower()
     if executor_type == "iterative" or executor_type == "future": # local
         # read configurations
-        num_workers = configs["Runner"].getint("num_workers", 1)
+        num_workers = get_runner_config("num_workers")
         if num_workers == 1 and executor_type != "iterative":
             warnings.warn("Get num_workers = 1, change to iterative executor")
             executor_type = "iterative"
-        compression = eval(configs["Runner"].get("compression", "None")) # compression is either int or None
+        compression = get_runner_config("compression") # compression is either int or None
         assert compression == None or isinstance(compression, int), "invalid compression level"
         
         executor = processor.IterativeExecutor(compression=compression)
@@ -287,37 +330,27 @@ if __name__ == "__main__":
                 schema=ScoutingJMENanoAODSchema,
                 # size of each chunk to process (a unit of work), default to 100000
                 # approximately, grow linearly with memory usage
-                chunksize=configs["Runner"].getint("chunksize", 100_000),
+                chunksize=get_runner_config("chunksize"),
 
                 # number of maximum chunks to process in each dataset, default to whole dataset
                 # do not set this when running the full analysis
                 # set this when testing
-                maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
+                maxchunks=get_runner_config("maxchunks"),
                 )
         
         # processing
-        processing(args, configs, runner, fileset, treename="Events", processor_instance=OHProcessor(**processor_config))
+        processing(configs, runner, fileset_json_path, treename="Events", processor_instance=OHProcessor(**processor_config))
         
     else: # distributed
         # currently only for lxplus
         import socket
         from dask.distributed import Client 
         from dask_lxplus import CernCluster
-        import shutil
-    
-#     job flavor
-#     espresso     = 20 minutes
-#     microcentury = 1 hour
-#     longlunch    = 2 hours
-#     workday      = 8 hours
-#     tomorrow     = 1 day
-#     testmatch    = 3 days
-#     nextweek     = 1 week
     
         print("Current interpreter: {}".format(sys.executable))
     
         # configure environment for grid authentication
-        proxy_path = configs["Runner"].get("proxy_path", "/afs/cern.ch/user/p/pinkaew/private/gridproxy.pem")
+        proxy_path = get_runner_config("proxy_path")
         os.environ['X509_USER_PROXY'] = proxy_path
         if os.path.isfile(os.environ['X509_USER_PROXY']):
             print("Found proxy at {}".format(os.environ['X509_USER_PROXY']))
@@ -333,7 +366,7 @@ if __name__ == "__main__":
                 'export X509_CERT_DIR={}'.format(os.environ["X509_CERT_DIR"]),            
             ]
         
-        transfer_input_filelist = [fileset_json_filename]
+        transfer_input_filelist = [fileset_json_path]
         path_proccessor_configs = [_ for _ in processor_config.keys() if _.endswith("path") or _.endswith("filelist")]
         for config in path_proccessor_configs:
             if processor_config[config] != None:
@@ -346,7 +379,7 @@ if __name__ == "__main__":
                                      .format(config, processor[config]))
         transfer_input_files = ",".join(transfer_input_filelist)
 
-        port_number = configs["Runner"].getint("port_number", 8786)
+        port_number = get_runner_config("port_number")
         cern_cluster_config = {"cores": 1,
                                "memory": "2000MB",
                                "disk": "10GB",
@@ -354,35 +387,26 @@ if __name__ == "__main__":
                                "lcg": True,
                                "nanny": False,
                                "container_runtime": "none",
-                               "log_directory": "/eos/user/p/pinkaew/condor/log",
+                               "log_directory": get_runner_config("log_directory"),
                                "scheduler_options": {"port": port_number, # port number to communicate with cluster
                                                      "host": socket.gethostname()
                                                     },
                                "job_extra": {
-                                   "MY.JobFlavour": '"{}"'.format(configs["Runner"].get("job_flavour", "longlunch")),
+                                   "MY.JobFlavour": '"{}"'.format(get_runner_config("job_flavour")),
                                    # only executables are transfer, heres are corrections
                                    "transfer_input_files": transfer_input_files
                                             },
-                               "batch_name": configs["Runner"].get("batch_name", "dask-worker"),
+                               "batch_name": get_runner_config("batch_name"),
                                "extra": ["--worker-port 10000:10100"],
                                "env_extra": env_extra
 
         }
         
-        # xrootdstr xrootd redirector
-        xrootdstr = "root://xrootd-cms.infn.it//" # for Europe and Asia
-        #xrootdstr = "root://cmsxrootd.fnal.gov//"
-        #xrootdstr = "root://xcache/" # for coffea.casa
-        #xrootdstr = "root://cms-xrd-global.cern.ch//" # query all sites
-        for dataset in fileset:
-            # remove /eos/cms and prepend xrootd redirector
-            fileset[dataset] = [xrootdstr + filename[8:] for filename in fileset[dataset]]
-        
         # with defines the scope of cluster, client
         # this ensures that cluster.close() and client.close() are called at the end
-        num_workers = configs["Runner"].getint("num_workers", 2)
-        min_jobs = configs["Runner"].getint("min_jobs", 2)
-        max_jobs = configs["Runner"].getint("max_jobs", 64)
+        num_workers = max(get_runner_config("num_workers"), 2)
+        min_jobs = get_runner_config("min_jobs")
+        max_jobs = get_runner_config("max_jobs")
         print("Initiating CernCluster")
         with CernCluster(**cern_cluster_config) as cluster:
             cluster.adapt(minimum=min_jobs, maximum=max_jobs)
@@ -402,17 +426,17 @@ if __name__ == "__main__":
                                     schema=ScoutingJMENanoAODSchema,
                                     # size of each chunk to process (a unit of work)
                                     # approximately, grow linearly with memory usage
-                                    chunksize=configs["Runner"].getint("chunksize", 100_000),
+                                    chunksize=get_runner_config("chunksize"),
 
                                     # number of maximum chunks to process in each dataset, default to whole dataset.
                                     # do not set this when running the full analysis.
                                     # set this when testing
-                                    maxchunks=eval(configs["Runner"].get("maxchunks", "None")),
+                                    maxchunks=get_runner_config("maxchunks"),
                                     # other arguments
                                     skipbadfiles=True,
                                     xrootdtimeout=60
                                     )
 
                 # processing
-                processing(args, configs, runner, fileset_json_filename, treename="Events", 
+                processing(configs, runner, fileset_json_path, treename="Events", 
                            processor_instance=OHProcessor(**processor_config))
