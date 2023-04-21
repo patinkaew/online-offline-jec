@@ -682,7 +682,7 @@ class SameBin(SelectorABC):
         second_object_field_bin_idx = get_bin_idx(second_object_field)
         mask = (first_object_field_bin_idx == second_object_field_bin_idx)
         events[self._first_object_name] = first_object[mask]
-        events[self._second_object_name] = first_object[mask]
+        events[self._second_object_name] = second_object[mask]
         return events
 
 class SameEtaBin(SameBin):
