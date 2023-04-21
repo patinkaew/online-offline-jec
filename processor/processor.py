@@ -56,6 +56,7 @@ class OHProcessor(processor.ProcessorABC):
                  
                  max_deltaR=0.2, # for deltaR matching
                  max_leading_jet=2, # select up to n leading jets to fill histograms
+                 same_eta_bin=None, # both jets must be in the same eta bin
                  
                  # histograms
                  is_data=True, # data or simulation
@@ -225,6 +226,22 @@ class OHProcessor(processor.ProcessorABC):
         self.eta_binning = eta_binning
         self.get_eta_axis = lambda eta_binning, num_bins=50, name="jet_eta", label=r"$\eta^{jet}$": \
                                eta_axis_dict[eta_binning](name, label) # syntactic sugar
+        
+        # same eta bin
+        eta_bin_dict = {"fine": [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
+                                              -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
+                                              -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
+                                              -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
+                                              -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
+                                              0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
+                                              1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
+                                              2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
+                                              4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
+                        "coarse": [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]}
+        assert same_eta_bin is None or same_eta_bin in eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
+        self.same_eta_bin = SameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
+                                       off_jet_name, on_jet_name)
+        
         # fill_gen and generator
         self.fill_gen = fill_gen
         if (not self.is_data) and self.fill_gen:
@@ -389,6 +406,13 @@ class OHProcessor(processor.ProcessorABC):
         # select n leading jets to plot
         matched_off_jets = self.max_leading_jet(matched_off_jets)
         matched_on_jets = self.max_leading_jet(matched_on_jets)
+        
+        # same eta binning
+        events[self.off_jet_name] = matched_off_jets
+        events[self.on_jet_name] = matched_on_jets
+        events = self.same_eta_bin(events, cutflow)
+        matched_off_jets = events[self.off_jet_name]
+        matched_on_jets = events[self.on_jet_name]
         
         elapsed_time = time.time() - last_time
         time_pf["selection"] += elapsed_time
