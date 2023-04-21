@@ -658,3 +658,33 @@ class PairwiseDeltaRMatching(SelectorABC):
             else:
                 cutflow[str(self)+" (off)"] += np.sum(ak.num(arrays[0]) > 0)
         return arrays
+    
+class SameBin(SelectorABC):
+    def __init__(self, bins, first_object_name, second_object_name, object_field):
+        super().__init__()
+        self._bins = bins
+        self._first_object_name = first_object_name
+        self._second_object_name = second_object_name
+        self._object_field = object_field
+        if bins is None:
+            self.off()
+    def __str__(self):
+        return "same bins"
+    def apply(self, events):
+        first_object = events[self._first_object_name]
+        second_object = events[self._second_object_name]
+        first_object_field = first_object[self._object_field]
+        second_object_field = second_object[self._object_field]
+        assert all(ak.num(first_object_field) == ak.num(second_object_field)), "length of both physics objects must be the same in every event"
+        counts = ak.num(first_object_field)
+        get_bin_idx = lambda arr: ak.unflatten(np.searchsorted(self._bins, ak.to_numpy(ak.flatten(arr))), counts)
+        first_object_field_bin_idx = get_bin_idx(first_object_field)
+        second_object_field_bin_idx = get_bin_idx(second_object_field)
+        mask = (first_object_field_bin_idx == second_object_field_bin_idx)
+        events[self._first_object_name] = first_object[mask]
+        events[self._second_object_name] = first_object[mask]
+        return events
+
+class SameEtaBin(SameBin):
+    def __init__(self, eta_bins, first_object_name, second_object_name):
+        super().__init__(eta_bins, first_object_name, second_object_name, object_field="eta")
