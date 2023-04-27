@@ -384,15 +384,17 @@ class OHProcessor(processor.ProcessorABC):
             on_jets_tag, on_jets = self.on_jet_tagprobe(on_jets[:, 0], on_jets[:, 1], on_jets, cutflow)
             
         if self.mix_jet_tagprobe.status and len(off_jets) > 0 and len(on_jets) > 0:
-            _, off_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], off_jets[:, 1], off_jets, cutflow)
-            _, off_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], off_jets[:, 0], off_jets, cutflow)
+            _, off_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], off_jets[:, 1], off_jets)
+            _, off_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], off_jets[:, 0], off_jets)
             off_jets = ak.concatenate([off_jets_01, off_jets_10], axis=1)
+            cutflow["off-tag-off-probe"] += len(ak.sum(ak.num(off_jets) == 1))
             
-            #_, on_jets_00 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 0], on_jets, cutflow)
-            _, on_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 1], on_jets, cutflow)
-            _, on_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 0], on_jets, cutflow)
-            #_, on_jets_11 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 1], on_jets, cutflow)
+            #_, on_jets_00 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 0], on_jets)
+            _, on_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 1], on_jets)
+            _, on_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 0], on_jets)
+            #_, on_jets_11 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 1], on_jets)
             on_jets = ak.concatenate([on_jets_01, on_jets_10], axis=1)
+            cutflow["off-tag-on-probe"] += len(ak.sum(ak.num(on_jets) == 1))
         
         # delta R matching
         matched_off_jets, matched_on_jets = self.deltaR_matching(off_jets, on_jets, cutflow)
