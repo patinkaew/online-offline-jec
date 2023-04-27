@@ -123,8 +123,8 @@ class OHProcessor(processor.ProcessorABC):
         
         # minimum number of jets
         # if tag and probe will be applied, need at least 2
-        min_off_jet = min_off_jet if not off_jet_tag_probe else max(min_off_jet, 2) 
-        min_on_jet = min_on_jet if not on_jet_tag_probe else max(min_on_jet, 2) 
+        min_off_jet = min_off_jet if not (off_jet_tag_probe or mix_jet_tag_probe) else max(min_off_jet, 2) 
+        min_on_jet = min_on_jet if not (on_jet_tag_probe or mix_jet_tag_probe) else max(min_on_jet, 2) 
         self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet, name=off_jet_label)
         self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet, name=on_jet_label)
         
