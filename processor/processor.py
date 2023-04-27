@@ -53,7 +53,7 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_tag_probe=True, on_jet_tag_probe=True, # whether to apply tag and probe
                  off_jet_tag_min_pt=0, on_jet_tag_min_pt=0, # tag min pt to apply during tag and probe
                  off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
-                 mix_jet_tag_and_probe = True, # tag = offline, probe = offline, online
+                 mix_jet_tag_probe = True, # tag = offline, probe = offline, online
                  mix_jet_tag_min_pt = 0,
                  mix_jet_max_alpha=1.0,
                  
@@ -163,7 +163,7 @@ class OHProcessor(processor.ProcessorABC):
         self.on_jet_tagprobe = TriggerDijetTagAndProbe(on_jet_tag_min_pt if on_jet_tag_probe else None, 
                                                        max_alpha=on_jet_max_alpha, swap=True, name=on_jet_label)
         # tag and probe
-        self.mix_jet_tagprobe = TriggerDijetTagAndProbe(mix_jet_tag_min_pt if mix_jet_tag_min_pt else None,
+        self.mix_jet_tagprobe = TriggerDijetTagAndProbe(mix_jet_tag_min_pt if mix_jet_tag_probe else None,
                                                         max_alpha=mix_jet_max_alpha, swap=False, name="tag_always_offline")
         
         # delta R matching
