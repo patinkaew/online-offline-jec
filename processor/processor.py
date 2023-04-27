@@ -53,6 +53,9 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_tag_probe=True, on_jet_tag_probe=True, # whether to apply tag and probe
                  off_jet_tag_min_pt=0, on_jet_tag_min_pt=0, # tag min pt to apply during tag and probe
                  off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
+                 mix_jet_tag_and_probe = True, # tag = offline, probe = offline, online
+                 mix_jet_tag_min_pt = 0,
+                 mix_jet_max_alpha=1.0,
                  
                  max_deltaR=0.2, # for deltaR matching
                  max_leading_jet=2, # select up to n leading jets to fill histograms
@@ -159,12 +162,34 @@ class OHProcessor(processor.ProcessorABC):
         self.on_jet_JEC = JECBlock(on_jet_weight_filelist, on_rho_name, name=on_jet_label, verbose=verbose)
         self.on_jet_tagprobe = TriggerDijetTagAndProbe(on_jet_tag_min_pt if on_jet_tag_probe else None, 
                                                        max_alpha=on_jet_max_alpha, swap=True, name=on_jet_label)
+        # tag and probe
+        self.mix_jet_tagprobe = TriggerDijetTagAndProbe(mix_jet_tag_min_pt if mix_jet_tag_min_pt else None,
+                                                        max_alpha=mix_jet_max_alpha, swap=False, name="tag_always_offline")
         
         # delta R matching
         self.deltaR_matching = DeltaRMatching(max_deltaR=max_deltaR)
         
         # select only n leading jets to fill histograms
         self.max_leading_jet = MaxLeadingObject(max_leading_jet, name="jet")
+        
+        # same eta bin
+        eta_bin_dict = {
+                        "fine": 
+                            [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
+                             -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
+                             -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
+                             -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
+                             -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
+                             0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
+                             1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
+                             2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
+                             4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
+                        "coarse": 
+                            [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]
+                        }
+        assert same_eta_bin is None or same_eta_bin in eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
+        self.same_eta_bin = SameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
+                                       off_jet_name, on_jet_name)
         
         # histograms
         self.is_data = is_data
@@ -205,42 +230,15 @@ class OHProcessor(processor.ProcessorABC):
         eta_axis_dict = {
                          "fine": 
                             lambda name="eta", label=r"$\eta$":
-                                hist.axis.Variable(
-                                    np.array([-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
-                                              -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
-                                              -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
-                                              -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
-                                              -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
-                                              0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
-                                              1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
-                                              2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
-                                              4.191,  4.363,  4.538,  4.716,  4.889, 5.191]), 
-                                    name=name, label=label),
+                                hist.axis.Variable(eta_bin_dict["fine"], name=name, label=label),
                          "coarse":
                             lambda name="eta", label=r"$\eta$":
-                                hist.axis.Variable(
-                                    np.array([-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]), 
-                                    name=name, label=label)
+                                hist.axis.Variable(eta_bin_dict["coarse"], name=name, label=label)
                         }
         assert eta_binning in eta_axis_dict, "Unrecognized eta_binning: {}".format(eta_binning)
         self.eta_binning = eta_binning
         self.get_eta_axis = lambda eta_binning, num_bins=50, name="jet_eta", label=r"$\eta^{jet}$": \
                                eta_axis_dict[eta_binning](name, label) # syntactic sugar
-        
-        # same eta bin
-        eta_bin_dict = {"fine": [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
-                                              -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
-                                              -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
-                                              -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
-                                              -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
-                                              0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
-                                              1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
-                                              2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
-                                              4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
-                        "coarse": [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]}
-        assert same_eta_bin is None or same_eta_bin in eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
-        self.same_eta_bin = SameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
-                                       off_jet_name, on_jet_name)
         
         # fill_gen and generator
         self.fill_gen = fill_gen
@@ -384,6 +382,17 @@ class OHProcessor(processor.ProcessorABC):
         on_jets, on_correction_level_in_use = self.on_jet_JEC(on_jets, events, cutflow)
         if self.on_jet_tagprobe.status and len(on_jets) > 0:
             on_jets_tag, on_jets = self.on_jet_tagprobe(on_jets[:, 0], on_jets[:, 1], on_jets, cutflow)
+            
+        if self.mix_jet_tagprobe.status and len(off_jets) > 0 and len(on_jets) > 0:
+            _, off_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], off_jets[:, 1], off_jets, cutflow)
+            _, off_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], off_jets[:, 0], off_jets, cutflow)
+            off_jets = ak.concatenate([off_jets_01, off_jets_10], axis=1)
+            
+            #_, on_jets_00 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 0], on_jets, cutflow)
+            _, on_jets_01 = self.mix_jet_tagprobe(off_jets[:, 0], on_jets[:, 1], on_jets, cutflow)
+            _, on_jets_10 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 0], on_jets, cutflow)
+            #_, on_jets_11 = self.mix_jet_tagprobe(off_jets[:, 1], on_jets[:, 1], on_jets, cutflow)
+            on_jets = ak.concatenate([on_jets_01, on_jets_10], axis=1)
         
         # delta R matching
         matched_off_jets, matched_on_jets = self.deltaR_matching(off_jets, on_jets, cutflow)
