@@ -525,8 +525,8 @@ class OHProcessor(processor.ProcessorABC):
                                           name="comparison", label="Online vs Offline")
             
         if "ref_comparison" in self.hist_to_fill:
-            ref_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-                                               name="ref_jet_pt", label=r"$p_T^{%s}$"%("Ref"))
+            ref_jet_pt_axis = hist.axis.Regular(3, 90, 105, name="ref_jet_pt", label=r"$p_T^{%s}$"%("Ref"), 
+                                                underflow=False, overflow=False)
             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
             on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
