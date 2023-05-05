@@ -272,10 +272,10 @@ class OHProcessor(processor.ProcessorABC):
         dataset = events.metadata.get("dataset", "untitled")
         
         # use TrigObj for HLT Jets
-        if "TrigObjJet" in [self.on_jet_name, self.off_jet_name]:
-            events["TrigObjJet"] = events["TrigObj"][events["TrigObj"].id == 1] # Jet = 1
-        if "TrigObjFatJet" in [self.on_jet_name, self.off_jet_name]:
-            events["TrigObjFatJet"] = events["TrigObj"][events["TrigObj"].id == 6] # FatJet = 6
+#         if "TrigObjJet" in [self.on_jet_name, self.off_jet_name]:
+#             events["TrigObjJet"] = events["TrigObj"][events["TrigObj"].id == 1] # Jet = 1
+#         if "TrigObjFatJet" in [self.on_jet_name, self.off_jet_name]:
+#             events["TrigObjFatJet"] = events["TrigObj"][events["TrigObj"].id == 6] # FatJet = 6
             
           # if there is no TrigObjJMEAK{4, 8}, but there is TrigObj          
 #         if "TrigObjJMEAK4" in [self.on_jet_name, self.off_jet_name]:
@@ -532,7 +532,7 @@ class OHProcessor(processor.ProcessorABC):
             on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
                                               name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
             cmp_jet_type_axis = hist.axis.StrCategory(["Gen"], name="jet_type", label="Types of Jet", growth=False)
-            out["ref_comparison"] = hist.Hist(dataset_axis, correction_level_axis, jet_type_axis, jet_eta_axis, jet_phi_axis,
+            out["ref_comparison"] = hist.Hist(dataset_axis, correction_level_axis, jet_type_axis, jet_eta_axis, #jet_phi_axis,
                                              ref_jet_pt_axis, off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
                                              name="ref_comparison", label="Online vs Offline [Ref]")
         # tag and probe histogram    
@@ -788,7 +788,7 @@ class OHProcessor(processor.ProcessorABC):
                 out["ref_comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
                                            jet_type="Gen",\
                                            jet_eta=ak.flatten(gen_matched_gen_jets.eta), \
-                                           jet_phi=ak.flatten(gen_matched_gen_jets.phi), \
+                                           #jet_phi=ak.flatten(gen_matched_gen_jets.phi), \
                                            ref_jet_pt=ak.flatten(gen_matched_gen_jets.pt), \
                                            off_jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
                                            on_jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]),
