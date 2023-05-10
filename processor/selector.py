@@ -18,14 +18,14 @@ import warnings
 ### apply: events -> events
 class LumiMaskSelector(SelectorABC):
     def __init__(self, lumi_json_path):
+        super().__init__()
         self._lumimask = LumiMask(lumi_json_path) if lumi_json_path else None
-    def __str__():
+    def __str__(self):
         return "lumimask"
-    def apply_lumi_mask(self, events):
+    def apply(self, events):
         if not self._lumimask:
             return events
         return self._lumimask(events.run, events.luminosityBlock)
-    apply = apply_lumi_mask
     
 class MinNPVGood(SelectorABC):
     def __init__(self, min_NPVGood=0):
@@ -401,13 +401,15 @@ class TagAndProbeABC(SelectorABC):
         if len(tag) == 0:
             return tag, probe
         
+        #tag = tag if tag.ndim == 2 else ak.unflatten(tag, counts=1)
+        #probe = probe if probe.ndim == 2 else ak.unflatten(probe, counts=1)
+        
         def make_tag_probe_mask(tag, probe):
             tag_mask = self.tag_condition(tag)
             probe_mask = self.tag_probe_condition(tag, probe)
             other_mask = self.other_condition(tag, probe, others)
             mask = tag_mask & probe_mask & other_mask
             return mask
-        
         mask = make_tag_probe_mask(tag, probe)
         if self._swap:
             combine = lambda x, y: ak.concatenate([ak.unflatten(x, counts=1), ak.unflatten(y, counts=1)], 
@@ -415,7 +417,10 @@ class TagAndProbeABC(SelectorABC):
             swap_mask = make_tag_probe_mask(probe, tag)
             tag, probe = combine(tag, probe), combine(probe, tag)
             mask = combine(mask, swap_mask)
-        return tag[mask], probe[mask]
+            return tag[mask], probe[mask]
+        else:
+            counts = ak.values_astype(mask, int)
+            return ak.unflatten(tag[mask], counts=counts), ak.unflatten(probe[mask], counts=counts)
     apply = apply_tag_and_probe
     
     def __call__(self, tag, probe, others=None, cutflow=None):
@@ -460,6 +465,49 @@ class TriggerDijetTagAndProbe(TagAndProbeABC):
         return alpha_cut
     
     apply_trigger_dijet_tag_and_probe = TagAndProbeABC.apply_tag_and_probe
+    
+class OnlineOfflineDijetTagAndProbe(SelectorABC):
+    def __init__(self, off_jet_name, on_jet_name, tag_min_pt, max_alpha=1.0):
+        super().__init__()
+        self._off_jet_name = off_jet_name
+        self._on_jet_name = on_jet_name
+        self._tag_min_pt = tag_min_pt
+        self._max_alpha = max_alpha
+        
+        if off_jet_name is None:
+            self.off()
+    def __str__(self):
+        return "T&P: {} and {}".format(self._off_jet_name, self._on_jet_name)
+    def apply(self, events):
+        mask = (ak.num(events[self._off_jet_name])>=2) & (ak.num(events[self._on_jet_name])>=2)
+        events = events[mask]
+        events[self._off_jet_name + "_orig"] = events[self._off_jet_name]
+        events[self._on_jet_name + "_orig"] = events[self._on_jet_name]
+        off_jets = events[self._off_jet_name][:, :4]
+        on_jets = off_jets.nearest(events[self._on_jet_name])
+        off_jets_tag, off_jets_probe = TriggerDijetTagAndProbe(swap=True, tag_min_pt=self._tag_min_pt, 
+                                                               max_alpha=self._max_alpha, name="off")\
+                                       .apply(off_jets[:, 0], off_jets[:, 1], off_jets)
+                      
+        on_jets_tag0, on_jets_probe0 = TriggerDijetTagAndProbe(swap=False, tag_min_pt=self._tag_min_pt, 
+                                                               max_alpha=self._max_alpha, name="on0")\
+                               .apply(off_jets[:, 0], on_jets[:, 1], on_jets)
+        
+        on_jets_tag1, on_jets_probe1 = TriggerDijetTagAndProbe(swap=False, tag_min_pt=self._tag_min_pt, 
+                                                               max_alpha=self._max_alpha, name="on1")\
+                               .apply(off_jets[:, 1], on_jets[:, 0], on_jets)
+                                                       
+        on_jets_tag = ak.concatenate([on_jets_tag0, on_jets_tag1], axis=1, mergebool=False)
+        on_jets_probe = ak.concatenate([on_jets_probe0, on_jets_probe1], axis=1, mergebool=False)
+        
+        events[self._off_jet_name + "_tag"] = off_jets_tag 
+        events[self._on_jet_name + "_tag"] = on_jets_tag 
+        events[self._off_jet_name + "_probe"] = off_jets_probe
+        events[self._on_jet_name + "_probe"] = on_jets_probe
+        events[self._off_jet_name] = off_jets_probe
+        events[self._on_jet_name] = on_jets_probe
+        
+        return events
     
 ### JEC block ###
 ### apply: jets, events -> jets
@@ -644,7 +692,7 @@ class PairwiseDeltaRMatching(SelectorABC):
         mask = ak.unflatten(np.full(np.sum(counts), True), counts) # all True mask
         num_objects = len(arrays)
         for first_slot, second_slot in itertools.combinations(map(str, range(num_objects)), 2):
-            mask = (mask & ((matched[first_slot].delta_r(matched[second_slot]) < self._max_deltaR)))
+            mask = (mask & (matched[first_slot].delta_r(matched[second_slot]) < self._max_deltaR))
         matched = matched[mask] # apply mask
         return tuple([matched[slot] for slot in map(str, range(num_objects))])
     apply = apply_pairwise_deltaR_matching
