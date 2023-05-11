@@ -10,17 +10,16 @@ from processor.selectorbase import SelectorList
 from processor.accumulator import LumiAccumulator
 
 from collections import defaultdict
-import itertools
 import warnings
 
-class SimpleProcessor(processor.ProcessorABC):
-    def __init__(self):
-        pass
-    def process(self, events):
-        print("nevents: ", len(events))
-        return {"nevents":len(events)}
-    def postprocess(self, accumulator):
-        return accumulator
+# class SimpleProcessor(processor.ProcessorABC):
+#     def __init__(self):
+#         pass
+#     def process(self, events):
+#         print("nevents: ", len(events))
+#         return {"nevents":len(events)}
+#     def postprocess(self, accumulator):
+#         return accumulator
 
 class OHProcessor(processor.ProcessorABC):
     def __init__(self, 
