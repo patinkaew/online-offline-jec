@@ -53,6 +53,7 @@ class OHProcessor(processor.ProcessorABC):
                  off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
                  use_tag_probe=True, tag_probe_tag_min_pt=0,
                  tag_probe_max_alpha=1.0,
+                 tag_probe_match_tag=False,
                  
                  max_deltaR=0.2, # for deltaR matching
                  max_leading_jet=2, # select up to n leading jets to fill histograms
@@ -161,7 +162,8 @@ class OHProcessor(processor.ProcessorABC):
         # tag and probe
         self.onofftagprobe = OnlineOfflineDijetTagAndProbe(off_jet_name if use_tag_probe else None,
                                                            on_jet_name, tag_min_pt=tag_probe_tag_min_pt,
-                                                           max_alpha=tag_probe_max_alpha)
+                                                           max_alpha=tag_probe_max_alpha,
+                                                           match_tag=tag_probe_match_tag)
         
         # delta R matching
         self.deltaR_matching = DeltaRMatching(max_deltaR=max_deltaR)
@@ -374,11 +376,6 @@ class OHProcessor(processor.ProcessorABC):
         events[self.off_jet_name] = off_jets
         events[self.on_jet_name] = on_jets
         events = self.onofftagprobe(events, cutflow)
-        # for tag and probe histograms
-        off_jets_probe = events[self.off_jet_name + "_probe"]
-        on_jets_probe = events[self.on_jet_name + "_probe"]
-        off_jets_tag = events[self.off_jet_name + "_tag"]
-        on_jets_tag = events[self.on_jet_name + "_tag"]
         
         on_jets = events[self.on_jet_name]
         off_jets = events[self.off_jet_name]
@@ -387,19 +384,19 @@ class OHProcessor(processor.ProcessorABC):
         matched_off_jets, matched_on_jets = self.deltaR_matching(off_jets, on_jets, cutflow)
         
         # if fill_gen
-#         if (not self.is_data) and self.fill_gen:
-#             gen_jets = events[self.gen_jet_name]
-#             gen_jets = self.gen_jet_Id(gen_jets, cutflow)
-#             gen_jets = self.gen_jet_veto_map(gen_jets, cutflow)
-#             if self.gen_jet_tagprobe.status and len(gen_jets) > 0:
-#                 at_least_two_gen_mask = (ak.num(gen_jets) >= 2)
-#                 gen_jets = gen_jets[at_least_two_gen_mask]
-#                 gen_jets_tag, gen_jets = self.gen_jet_tagprobe(gen_jets[:, 0], gen_jets[:, 1], gen_jets, cutflow)
-#                 gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
-#                 = self.gen_deltaR_matching([off_jets[at_least_two_gen_mask], on_jets[at_least_two_gen_mask], gen_jets], cutflow)
-#             else:
-#                 gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
-#                 = self.gen_deltaR_matching([off_jets, on_jets, gen_jets], cutflow)
+        if (not self.is_data) and self.fill_gen:
+            gen_jets = events[self.gen_jet_name]
+            gen_jets = self.gen_jet_Id(gen_jets, cutflow)
+            gen_jets = self.gen_jet_veto_map(gen_jets, cutflow)
+            if self.gen_jet_tagprobe.status and len(gen_jets) > 0:
+                at_least_two_gen_mask = (ak.num(gen_jets) >= 2)
+                gen_jets = gen_jets[at_least_two_gen_mask]
+                gen_jets_tag, gen_jets = self.gen_jet_tagprobe(gen_jets[:, 0], gen_jets[:, 1], gen_jets, cutflow)
+                gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
+                = self.gen_deltaR_matching([off_jets[at_least_two_gen_mask], on_jets[at_least_two_gen_mask], gen_jets], cutflow)
+            else:
+                gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
+                = self.gen_deltaR_matching([off_jets, on_jets, gen_jets], cutflow)
         
         # select n leading jets to plot
         matched_off_jets = self.max_leading_jet(matched_off_jets)
@@ -481,34 +478,34 @@ class OHProcessor(processor.ProcessorABC):
             out["pt_balance"] = h_pt_balance
         
         # 2d correlation histogram
-#         if "comparison" in self.hist_to_fill:
-#             on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-#                                               name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
-#             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-#                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
-#             cmp_jet_types = [self.off_jet_label]
-#             if (not self.is_data) and self.fill_gen:
-#                 cmp_jet_types += [self.off_jet_label + " (Matched Gen)"]
+        if "comparison" in self.hist_to_fill:
+            on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                              name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
+            off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                               name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
+            cmp_jet_types = [self.off_jet_label]
+            if (not self.is_data) and self.fill_gen:
+                cmp_jet_types += [self.off_jet_label + " (Matched Gen)"]
                 
-#             cmp_jet_type_axis = hist.axis.StrCategory(cmp_jet_types, name="jet_type", label="Types of Jet", growth=False)
-#             out["comparison"] = hist.Hist(dataset_axis, correction_level_axis, cmp_jet_type_axis, jet_eta_axis, jet_phi_axis,
-#                                           off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
-#                                           name="comparison", label="Online vs Offline")
+            cmp_jet_type_axis = hist.axis.StrCategory(cmp_jet_types, name="jet_type", label="Types of Jet", growth=False)
+            out["comparison"] = hist.Hist(dataset_axis, correction_level_axis, cmp_jet_type_axis, jet_eta_axis, jet_phi_axis,
+                                          off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
+                                          name="comparison", label="Online vs Offline")
             
-#         if "gen_comparison" in self.hist_to_fill:
-#             #ref_jet_pt_axis = hist.axis.Regular(3, 90, 105, name="ref_jet_pt", label=r"$p_T^{%s}$"%("Ref"), 
-#                                                 #underflow=False, overflow=False)
-#             gen_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-#                                                name="gen_jet_pt", label=r"$p_T^{%s}$"%self.gen_jet_label)
-#             off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-#                                                name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
-#             on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
-#                                               name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
-#             #cmp_jet_type_axis = hist.axis.StrCategory(["Gen"], name="jet_type", label="Types of Jet", growth=False)
-#             out["gen_comparison"] = hist.Hist(dataset_axis, correction_level_axis, jet_type_axis, jet_eta_axis, #jet_phi_axis,
-#                                              gen_jet_pt_axis, off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
-#                                              name="gen_comparison", label="Online vs Offline [Gen]")
-        # tag and probe histograms    
+        if "gen_comparison" in self.hist_to_fill:
+            #ref_jet_pt_axis = hist.axis.Regular(3, 90, 105, name="ref_jet_pt", label=r"$p_T^{%s}$"%("Ref"), 
+                                                #underflow=False, overflow=False)
+            gen_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                               name="gen_jet_pt", label=r"$p_T^{%s}$"%self.gen_jet_label)
+            off_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                               name="off_jet_pt", label=r"$p_T^{%s}$"%self.off_jet_label)
+            on_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                              name="on_jet_pt", label=r"$p_T^{%s}$"%self.on_jet_label)
+            #cmp_jet_type_axis = hist.axis.StrCategory(["Gen"], name="jet_type", label="Types of Jet", growth=False)
+            out["gen_comparison"] = hist.Hist(dataset_axis, correction_level_axis, jet_eta_axis, #jet_phi_axis,
+                                             gen_jet_pt_axis, off_jet_pt_axis, on_jet_pt_axis, storage=self.storage,
+                                             name="gen_comparison", label="Online vs Offline [Gen]")
+        # tag and probe histograms
         if "tp_response" in self.hist_to_fill and self.onofftagprobe.status:
             tp_response_axis = hist.axis.Regular(200, 0, 5, name="tp_response", 
                                                    label=r"Tag and Probe $p_T$ response")
@@ -540,10 +537,20 @@ class OHProcessor(processor.ProcessorABC):
                                                       self.off_jet_label + " (Ave)", self.on_jet_label + " (Ave)"], 
                                                       name="jet_type", label="Types of Jet", growth=False)
             tp_mpf_axis = hist.axis.Regular(200, -2, 2, name="tp_mpf", label=r"Tag and Probe MET Projection Fraction")
-            h_tp_mpf = hist.Hist(dataset_axis, jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
+            h_tp_mpf = hist.Hist(dataset_axis, tp_jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
                                  tp_mpf_axis, storage=self.storage,
                                  name="tp_mpf", label=r"Tag and Probe MET Projection Fraction")
             out["tp_mpf"] = h_tp_mpf
+        if "tp_comparison" in self.hist_to_fill and self.onofftagprobe.status and self.onofftagprobe._match_tag:
+            tag_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                               name="tag_jet_pt", label=r"$p_T^{%s, tag}$"%self.off_jet_label)
+            off_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                               name="off_jet_probe_pt", label=r"$p_T^{%s, probe}$"%self.off_jet_label)
+            on_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+                                              name="on_jet_probe_pt", label=r"$p_T^{%s, probe}$"%self.on_jet_label)
+            h_tp_comp = hist.Hist(dataset_axis, jet_eta_axis, tag_jet_pt_axis, 
+                                  off_jet_probe_pt_axis, on_jet_probe_pt_axis, storage=self.storage)
+            out["tp_comparison"] = h_tp_comp
         
         # 1D histograms (technically, these are reducible from most of above histograms)
         if "jet_pt" in self.hist_to_fill:
@@ -654,6 +661,7 @@ class OHProcessor(processor.ProcessorABC):
                 sum_pt = matched_off_jets["pt_"+off_correction_level_name] + matched_on_jets["pt_"+on_correction_level_name]
                 diff_pt = matched_on_jets["pt_"+on_correction_level_name] - matched_off_jets["pt_"+off_correction_level_name]
                 pt_balance = diff_pt / sum_pt
+                average_pt = 0.5 * sum_pt
                 
                 # filling offline as x axis
                 out["pt_balance"].fill(dataset=dataset, correction_level=correction_level_label, 
@@ -701,14 +709,14 @@ class OHProcessor(processor.ProcessorABC):
 #                             warnings.warn("Fail to retrieve matched gen for online")
             
             # comparison histogram
-#             if "comparison" in out:  
-#                 out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
-#                                        jet_type=self.off_jet_label,\
-#                                        jet_eta=ak.flatten(matched_off_jets.eta), \
-#                                        jet_phi=ak.flatten(matched_off_jets.phi), \
-#                                        off_jet_pt=ak.flatten(matched_off_jets["pt_"+off_correction_level_name]), \
-#                                        on_jet_pt=ak.flatten(matched_on_jets["pt_"+on_correction_level_name]),
-#                                        weight=weight)
+            if "comparison" in out:  
+                out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
+                                       jet_type=self.off_jet_label,\
+                                       jet_eta=ak.flatten(matched_off_jets.eta), \
+                                       jet_phi=ak.flatten(matched_off_jets.phi), \
+                                       off_jet_pt=ak.flatten(matched_off_jets["pt_"+off_correction_level_name]), \
+                                       on_jet_pt=ak.flatten(matched_on_jets["pt_"+on_correction_level_name]),
+                                       weight=weight)
                 
 #                 if (not self.is_data) and self.fill_gen:
 #                     out["comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
@@ -718,19 +726,23 @@ class OHProcessor(processor.ProcessorABC):
 #                                            off_jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
 #                                            on_jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]),
 #                                            weight=gen_matched_weight)
-#             if "ref_comparison" in out:
-#                 out["ref_comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
-#                                            jet_type="Gen",\
-#                                            jet_eta=ak.flatten(gen_matched_gen_jets.eta), \
-#                                            #jet_phi=ak.flatten(gen_matched_gen_jets.phi), \
-#                                            gen_jet_pt=ak.flatten(gen_matched_gen_jets.pt), \
-#                                            off_jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
-#                                            on_jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]),
-#                                            weight=gen_matched_weight)
+            if "gen_comparison" in out:
+                out["gen_comparison"].fill(dataset=dataset, correction_level=correction_level_label, 
+                                           #jet_type="Gen",\
+                                           jet_eta=ak.flatten(gen_matched_gen_jets.eta), \
+                                           #jet_phi=ak.flatten(gen_matched_gen_jets.phi), \
+                                           gen_jet_pt=ak.flatten(gen_matched_gen_jets.pt), \
+                                           off_jet_pt=ak.flatten(gen_matched_off_jets["pt_"+off_correction_level_name]), \
+                                           on_jet_pt=ak.flatten(gen_matched_on_jets["pt_"+on_correction_level_name]),
+                                           weight=gen_matched_weight)
             
         # tag and probe histogram
         # NB: these are unmatched (before deltaR matching)
-        if ("tp_response" in out) or ("tp_diff_ratio" in out) or ("tp_pt_balance" in out) or ("tp_mpf" in out):
+        if self.onofftagprobe.status and any([_.startswith("tp_") for _ in out.keys()]):
+            off_jets_probe = events[self.off_jet_name + "_probe"]
+            on_jets_probe = events[self.on_jet_name + "_probe"]
+            off_jets_tag = events[self.off_jet_name + "_tag"]
+            on_jets_tag = events[self.on_jet_name + "_tag"]
             if self.is_data:
                 off_tp_weight = None
                 on_tp_weight = None
@@ -824,6 +836,17 @@ class OHProcessor(processor.ProcessorABC):
                                #jet_phi=ak.flatten(on_jets_tag.phi),
                                tp_mpf=ak.flatten(on_mpf),
                                weight=on_tp_weight)
+            
+        if "tp_comparison" in out:
+            out["tp_comparison"].fill(dataset=dataset,
+                                      #jet_type="Gen",\
+                                      jet_eta=ak.flatten(off_jets_tag.eta), 
+                                      #jet_phi=ak.flatten(off_jets_tag.phi), \
+                                      tag_jet_pt=ak.flatten(off_jets_tag.pt), \
+                                      off_jet_probe_pt=ak.flatten(off_jets_probe.pt), \
+                                      on_jet_probe_pt=ak.flatten(on_jets_probe.pt),
+                                      weight=off_tp_weight)
+            
                                            
 #         if "tag_and_probe" in out:
 #             if self.off_jet_tagprobe.status:

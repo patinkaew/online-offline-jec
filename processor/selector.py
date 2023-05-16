@@ -466,7 +466,7 @@ class TriggerDijetTagAndProbe(TagAndProbeABC):
     
     apply_trigger_dijet_tag_and_probe = TagAndProbeABC.apply_tag_and_probe
     
-class OnlineOfflineDijetTagAndProbe(SelectorABC):
+class OnlineOfflineDijetTagAndProbeOld(SelectorABC):
     def __init__(self, off_jet_name, on_jet_name, tag_min_pt, max_alpha=1.0):
         super().__init__()
         self._off_jet_name = off_jet_name
@@ -483,7 +483,7 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
         events = events[mask]
         events[self._off_jet_name + "_orig"] = events[self._off_jet_name]
         events[self._on_jet_name + "_orig"] = events[self._on_jet_name]
-        off_jets = events[self._off_jet_name][:, :4]
+        off_jets = events[self._off_jet_name][:, :3]
         on_jets = off_jets.nearest(events[self._on_jet_name])
         off_jets_tag, off_jets_probe = TriggerDijetTagAndProbe(swap=True, tag_min_pt=self._tag_min_pt, 
                                                                max_alpha=self._max_alpha, name="off")\
@@ -508,6 +508,93 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
         events[self._on_jet_name] = on_jets_probe
         
         return events
+    
+class OnlineOfflineDijetTagAndProbe(SelectorABC):
+    def __init__(self, off_jet_name, on_jet_name, tag_min_pt, max_alpha=1.0, match_tag=False):
+        super().__init__()
+        self._off_jet_name = off_jet_name
+        self._on_jet_name = on_jet_name
+        self._tag_min_pt = tag_min_pt
+        self._max_alpha = max_alpha
+        self._match_tag = match_tag
+        
+        if off_jet_name is None:
+            self.off()
+    def __str__(self):
+        return "T&P [T]: {} and {}".format(self._off_jet_name, self._on_jet_name)
+    def apply(self, events):        
+        def trigger_dijet_tag_and_probe(tag, probe, others):
+            # tag condition
+            tag_mask = tag.pt > self._tag_min_pt
+            
+            # tag probe condition
+            opposite_cut = (np.abs(tag.phi - probe.phi) > 2.7)
+            close_pt_cut = (np.abs(tag.pt - probe.pt) < 0.7 * (tag.pt + probe.pt))
+            probe_mask = opposite_cut & close_pt_cut
+            
+            tag_probe_mask = tag_mask & probe_mask
+            
+            # others condition
+            # alpha = 2*jet3/(jet1 + jet2) <= 1, so if max_alpha > 1, then alpha_cut does nothing
+            if self._max_alpha and (self._max_alpha <= 1):
+                three_jets = others[:, :3]
+                alpha_cut = (2 * three_jets[:, -1].pt < self._max_alpha * (tag.pt + probe.pt))
+                alpha_cut = alpha_cut | (ak.num(others) == 2)
+                
+                other_mask = alpha_cut
+                tag_probe_mask = tag_probe_mask & other_mask
+            
+            tag_probe_counts = ak.values_astype(tag_probe_mask, int)
+            apply_mask = lambda x: ak.unflatten(x[tag_probe_mask], counts=tag_probe_counts)
+            return map(apply_mask, (tag, probe))
+        
+        def match_offline_online_tag(off_tag, off_probe, on_tag, on_probe):
+            min_tag_count = ak.min([ak.num(off_tag), ak.num(on_tag)], axis=0)
+            min_tag_mask = np.array(ak.values_astype(min_tag_count, bool))
+            apply_mask = lambda x: ak.unflatten(ak.flatten(x[min_tag_mask]), counts=min_tag_count)
+            return map(apply_mask, (off_tag, off_probe, on_tag, on_probe))
+
+        
+        # select events with at least two offline and online jets
+        mask = (ak.num(events[self._off_jet_name])>=2) & (ak.num(events[self._on_jet_name])>=2)
+        events = events[mask]
+        # save original
+        events[self._off_jet_name + "_orig"] = events[self._off_jet_name]
+        events[self._on_jet_name + "_orig"] = events[self._on_jet_name]
+        # retrieve offline jets
+        off_jets = events[self._off_jet_name][:, :3]
+        # retrieve online jets, ordering with dR closest to offline
+        on_jets = off_jets.nearest(events[self._on_jet_name])
+        
+        # apply tag and probe
+        off_jets_tag0, off_jets_probe0 = trigger_dijet_tag_and_probe(off_jets[:, 0], off_jets[:, 1], off_jets)
+        on_jets_tag0, on_jets_probe0 = trigger_dijet_tag_and_probe(off_jets[:, 0], on_jets[:, 1], on_jets)
+        off_jets_tag1, off_jets_probe1 = trigger_dijet_tag_and_probe(off_jets[:, 1], off_jets[:, 0], off_jets)
+        on_jets_tag1, on_jets_probe1 = trigger_dijet_tag_and_probe(off_jets[:, 1], on_jets[:, 0], on_jets)
+        
+        # match tag, if requested
+        if self._match_tag:
+            off_jets_tag0, off_jets_probe0, on_jets_tag0, on_jets_probe0 \
+                = match_offline_online_tag(off_jets_tag0, off_jets_probe0, on_jets_tag0, on_jets_probe0)
+            off_jets_tag1, off_jets_probe1, on_jets_tag1, on_jets_probe1 \
+                = match_offline_online_tag(off_jets_tag1, off_jets_probe1, on_jets_tag1, on_jets_probe1)
+        
+        # combine results from swap
+        off_jets_tag = ak.concatenate([off_jets_tag0, off_jets_tag1], axis=1, mergebool=False)
+        off_jets_probe = ak.concatenate([off_jets_probe0, off_jets_probe1], axis=1, mergebool=False)
+        on_jets_tag = ak.concatenate([on_jets_tag0, on_jets_tag1], axis=1, mergebool=False)
+        on_jets_probe = ak.concatenate([on_jets_probe0, on_jets_probe1], axis=1, mergebool=False)
+        
+        # save results
+        events[self._off_jet_name + "_tag"] = off_jets_tag 
+        events[self._on_jet_name + "_tag"] = on_jets_tag 
+        events[self._off_jet_name + "_probe"] = off_jets_probe
+        events[self._on_jet_name + "_probe"] = on_jets_probe
+        events[self._off_jet_name] = off_jets_probe
+        events[self._on_jet_name] = on_jets_probe
+        
+        return events
+    
     
 ### JEC block ###
 ### apply: jets, events -> jets
