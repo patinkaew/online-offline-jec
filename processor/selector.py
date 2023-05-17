@@ -168,7 +168,7 @@ class MinTrigger(SelectorABC):
                     mask = np.logical_and(mask, np.logical_not(events.HLT[flag]))
         return events[mask]
     apply = apply_min_trigger
-    
+
 class FlagFilter(SelectorABC):
     def __init__(self, flag_filter):
         super().__init__()
@@ -180,6 +180,19 @@ class FlagFilter(SelectorABC):
             return events
         return events[events.Flag[self._flag_filter]]
     apply = apply_flag_filter
+    
+class FlagFilters(SelectorABC):
+    def __init__(self, flag_filters):
+        super().__init__()
+        if isinstance(flag_filters, str):
+            flag_filters = flag_filters.split()
+        self._flag_filters = flag_filters
+    def __str__(self):
+        return " ".join(self._flag_filters)
+    def apply(self, events):
+        if not self._flag_filters:
+            return events
+        return events[ak.all([events.Flag[flag] for flag in self._flag_filters], axis=0)]
 
 class METFilter(FlagFilter):
     def __init__(self):
