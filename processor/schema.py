@@ -36,8 +36,8 @@ class ScoutingJMENanoAODSchema(JMENanoAODSchema):
         "ScoutingFatJet": "FatJet",
         "ScoutingRho": "Rho"
     }
-    all_cross_references = {
-        **JMENanoAODSchema.all_cross_references,
-        "ScoutingJet_genJetIdx": "GenJet",
-        "ScoutingFatJet_genJetAK8Idx": "GenJetAK8ForJEC",
-    }
+#     all_cross_references = {
+#         **JMENanoAODSchema.all_cross_references,
+#         "ScoutingJet_genJetIdx": "GenJet",
+#         "ScoutingFatJet_genJetAK8Idx": "GenJetAK8ForJEC",
+#     }
