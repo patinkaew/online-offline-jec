@@ -109,9 +109,10 @@ class OHProcessor(processor.ProcessorABC):
         self.max_pv_rxy = MaxPV_rxy(max_PV_rxy=2)
         
         # flag_filters
-        flag_filters = flag_filters if flag_filters else []
-        flag_filters = [flag_filters] if isinstance(flag_filters, str) else flag_filters
-        self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
+        #flag_filters = flag_filters if flag_filters else []
+        #flag_filters = [flag_filters] if isinstance(flag_filters, str) else flag_filters
+        #self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
+        self.flag_filters = FlagFilters(flag_filters)
         
         # main PV matching
         #self.close_pv_z = ClosePV_z(off_PV, on_PV, sigma_multiple=5) # max_dz=0.2
