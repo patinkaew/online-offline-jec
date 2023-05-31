@@ -230,7 +230,18 @@ class MaxMET_sumET(SelectorABC):
             mask = mask | (events[self._MET_type].pt <= self._min_MET)
         return events[mask]
     apply = apply_max_MET_sumET
-
+    
+class PileupPthatmaxLessThanGeneratorBinvar(SelectorABC):
+    def __init__(self, use):
+        super().__init__()
+        if not use:
+            self.off()
+    def __str__(self):
+        return "Pile-up pthat_max < Generator binvar"
+    def apply(self, events):
+        mask = (events.Pileup.pthatmax < events.Generator.binvar)
+        return events[mask]
+        
 # wrap jet-level to event-level selector
 class EventWrappedPhysicsObjectSelector(SelectorABC): 
     def __init__(self, physics_object_name, physics_object_selector, discard_empty=False):
@@ -268,6 +279,28 @@ class MinObject(SelectorABC):
         return physics_objects[mask] 
     apply = apply_min_object
 
+class ObjectMinField(SelectorABC):
+    def __init__(self, field, min_value, name=""):
+        super().__init__()
+        if field:
+            assert len(name) > 0 and name != None, "must provide unique name"
+        self._field = field
+        self._min_value = min_value
+        self._name = name    
+    def __str__(self):
+        return "{} {} > {}".format(self._name, self._field, self._min_value)
+    def apply(self, physics_object):
+        if not self._field:
+            return physics_object
+        mask = (physics_object[self._field] > self._min_value)
+        return physics_object[mask]
+    
+class ObjectMinPt(ObjectMinField):
+    def __init__(self, min_pt=-np.inf, name=""):
+        super().__init__("pt", min_pt, name)
+    def __str__(self):
+        return "{} {} > {} GeV".format(self._name, self._field, self._min_value)
+
 class ObjectInRange(SelectorABC):
     def __init__(self, field, min_value=-np.inf, max_value=np.inf, mirror=False, name=""):
         super().__init__()
@@ -279,25 +312,25 @@ class ObjectInRange(SelectorABC):
         self._mirror = mirror
         self._name = name
     def __str__(self):
-        return "select {} {} in range ({}, {})".format(self._name, self._field, self._min_value, self._max_value)
-    def apply_object_in_range(self, physics_object):
+        return "{} {} in range ({}, {})".format(self._name, self._field, self._min_value, self._max_value)
+    def apply(self, physics_object):
         if not self._field:
             return physics_object
         mask = (physics_object[self._field] > self._min_value) & (physics_object[self._field] < self._max_value)
         if self._mirror:
             mask = mask | ((physics_object[self._field] < -self._min_value) & (physics_object[self._field] > -self._max_value))
         return physics_object[mask]
-    apply = apply_object_in_range
+    #apply = apply_object_in_range
 
 class ObjectInPtRange(ObjectInRange):
     def __init__(self, min_pt=-np.inf, max_pt=np.inf, name=""):
         super().__init__("pt", min_pt, max_pt, False, name)
-    apply_object_in_pt_range = ObjectInRange.apply
+    #apply_object_in_pt_range = ObjectInRange.apply
     
 class ObjectInEtaRange(ObjectInRange):
     def __init__(self, min_eta=-np.inf, max_eta=np.inf, mirror=False, name=""):
         super().__init__("eta", min_eta, max_eta, mirror, name)
-    apply_object_in_eta_range = ObjectInRange.apply
+    #apply_object_in_eta_range = ObjectInRange.apply
         
 class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied actually. For T&P, this shouldn't matter
     def __init__(self, max_leading, name=""):
