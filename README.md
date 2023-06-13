@@ -1,4 +1,4 @@
-# Online and offline jet energy correction (JEC) studies
+# online and offline jet energy correction (JEC) studies
 
 ## Introduction
 

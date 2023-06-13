@@ -14,7 +14,7 @@ from coffea import processor
 from coffea import util as cutil
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
-from processor.processor import OHProcessor, SimpleProcessor
+from processor.processor import OHProcessor#, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
 from util import *
 
@@ -224,6 +224,11 @@ def processing(configs, runner, fileset, processor_instance, treename="Events"):
 #     testmatch    = 3 days
 #     nextweek     = 1 week
 
+#print()
+user = os.getcwd().split('/')[4]
+#print("/eos/user/{}/{}/condor/log".format(user[0], user))
+#print()
+
 io_default_config = [("input_paths", ""),
                      ("dataset_names", None),
                      ("check_bad_files", False),
@@ -241,7 +246,7 @@ runner_default_config = [("executor", "iterative"),
                          ("proxy_path", os.path.join(os.path.expanduser("~"), "private/gridproxy.pem")),
                          #("proxy_path", "/afs/cern.ch/user/p/pinkaew/private/gridproxy.pem"),
                          ("port_number", 8786),
-                         ("log_directory", "/eos/user/{}/{}/condor/log".format(os.path.join(os.getlogin())[0], os.path.join(os.getlogin()))),
+                         ("log_directory", '/eos/user/{}/{}/condor/log'.format(user[0], user)),
                          ("job_flavour", "workday"),
                          ("min_jobs", 2),
                          ("max_jobs", 64),

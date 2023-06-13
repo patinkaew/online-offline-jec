@@ -1,0 +1,14 @@
+{
+    "QCD": [
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-1.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-10.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-100.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-101.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-102.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-103.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-104.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-105.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-106.root",
+        "root://xrootd-cms.infn.it///store/group/phys_jetmet/pinkaew/JME-Scouting-Nano/QCD_PT-15to7000_TuneCP5_13p6TeV_pythia8/Run3Summer22EE/230510_164629/0000/tree_jmenano_qcd_1-107.root"
+    ]
+}

@@ -575,8 +575,8 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
             
             # tag probe condition
             opposite_cut = (np.abs(tag.phi - probe.phi) > 2.7)
-            close_pt_cut = (np.abs(tag.pt - probe.pt) < 0.7 * (tag.pt + probe.pt))
-            probe_mask = opposite_cut & close_pt_cut
+            #close_pt_cut = (np.abs(tag.pt - probe.pt) < 0.7 * (tag.pt + probe.pt))
+            probe_mask = opposite_cut #& close_pt_cut
             
             tag_probe_mask = tag_mask & probe_mask
             
@@ -587,7 +587,9 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
                 alpha_cut = (2 * three_jets[:, -1].pt < self._max_alpha * (tag.pt + probe.pt))
                 alpha_cut = alpha_cut | (ak.num(others) == 2)
                 
-                other_mask = alpha_cut
+                #third_jet_max_pt_cut = (three_jets[:, -1].pt < 30) | (ak.num(others) == 2)
+                
+                other_mask = alpha_cut #& third_jet_max_pt_cut
                 tag_probe_mask = tag_probe_mask & other_mask
             
             tag_probe_counts = ak.values_astype(tag_probe_mask, int)
