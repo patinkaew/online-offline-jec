@@ -33,6 +33,7 @@ class OHProcessor(processor.ProcessorABC):
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
                  off_PV="PV", on_PV=None, # event_level, match PV from two reconstruction types
+                 pthatmax_less_than_binvar=False, # event-level, pthat_max < pthat
                  min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
                  MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
                  max_MET_sumET=None, min_MET=45, 
@@ -40,6 +41,7 @@ class OHProcessor(processor.ProcessorABC):
                  trigger_type=None, trigger_flag_prefix="PFJet", trigger_all_pts=None,
                  
                  # jet-level selections
+                 off_jet_min_pt=0, on_jet_min_pt=0, # jet-level, min pt
                  off_jet_Id=None, on_jet_Id=None, # jet-level, jet id cut
                  off_jet_veto_map_json_path=None, on_jet_veto_map_json_path=None, # jet-level, jet veto map cut
                  off_jet_veto_map_correction_name=None, on_jet_veto_map_correction_name=None,
@@ -117,12 +119,23 @@ class OHProcessor(processor.ProcessorABC):
         # main PV matching
         #self.close_pv_z = ClosePV_z(off_PV, on_PV, sigma_multiple=5) # max_dz=0.2
         
+        # pthatmax < pthat
+        self.pthatmax_less_than_binvar = PileupPthatmaxLessThanGeneratorBinvar((not is_data) and pthatmax_less_than_binvar)
+        
         # minimum number of jets
         # if tag and probe will be applied, need at least 2
         min_off_jet = min_off_jet #if not (off_jet_tag_probe or use_tag_probe) else max(min_off_jet, 2) 
         min_on_jet = min_on_jet #if not (on_jet_tag_probe or use_tag_probe) else max(min_on_jet, 2) 
         self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet, name=off_jet_label)
         self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet, name=on_jet_label)
+        
+        # minimum jets pt
+        self.off_jet_min_pt = EventWrappedPhysicsObjectSelector(off_jet_name,
+                                ObjectMinPt(off_jet_min_pt, name=off_jet_label),
+                                discard_empty=True)
+        self.on_jet_min_pt = EventWrappedPhysicsObjectSelector(on_jet_name,
+                                ObjectMinPt(on_jet_min_pt, name=on_jet_label),
+                                discard_empty=True)
         
         # MET cut
         self.MET_type = MET_type
@@ -328,12 +341,19 @@ class OHProcessor(processor.ProcessorABC):
         events = self.max_pv_z(events, cutflow)
         events = self.max_pv_rxy(events, cutflow)
         
+        # Flag filters
+        events = self.flag_filters(events, cutflow)
+        
+        # pthatmax < pthat
+        events = self.pthatmax_less_than_binvar(events, cutflow)
+        
         # minimum numbers of jets
         events = self.min_off_jet(events, cutflow)
         events = self.min_on_jet(events, cutflow)
         
-        # Flag filters
-        events = self.flag_filters(events, cutflow)
+        # jets minimum pt
+        events = self.off_jet_min_pt(events, cutflow)
+        events = self.on_jet_min_pt(events, cutflow)
         
         # PV matching
         #events = self.close_pv_z(events, cutflow)
