@@ -2,14 +2,14 @@ import numpy as np
 import awkward as ak
 import hist
 
-from coffea import processor
+from coffea.processor import ProcessorABC
 from coffea.lumi_tools import LumiMask, LumiData, LumiList
 
 from processor.selector import *
 from processor.selectorbase import SelectorList
 from processor.accumulator import LumiAccumulator
 
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import warnings
 
 # class SimpleProcessor(processor.ProcessorABC):
@@ -21,22 +21,22 @@ import warnings
 #     def postprocess(self, accumulator):
 #         return accumulator
 
-class OHProcessor(processor.ProcessorABC):
+class OHProcessor(ProcessorABC):
     def __init__(self, 
                  off_jet_name, off_jet_label=None, # offline jet
                  on_jet_name="TrigObjJMEAK4", on_jet_label=None, # online jet
                  lumi_json_path=None, # path to gloden json file (good run certification)
                  lumi_csv_path=None, # path to output lumi csv from brilcalc
                  save_processed_lumi=True, # save processed lumi section (only data)
-                 compute_processed_lumi=True, # compute integrated luminosity at post-processing (only data)
+                 #compute_processed_lumi=True, # compute integrated luminosity at post-processing (only data)
                  
                  # event-level selections
                  flag_filters=None,  # event_level, apply flag filters, e.g. METfilters
                  off_PV="PV", on_PV=None, # event_level, match PV from two reconstruction types
-                 pthatmax_less_than_binvar=False, # event-level, pthat_max < pthat
+                 pthatmax_less_than_binvar=True, # event-level, pthat_max < pthat to remove hotspots in MC
                  min_off_jet=1, min_on_jet=1, # event-level, select events with at least n jets
-                 MET_type="MET", max_MET=None, # event-level, select max MET and/or max MET/sumET
-                 max_MET_sumET=None, min_MET=45, 
+                 MET_cut_MET_type="MET", MET_cut_max_MET=None, # event-level, select max MET and/or max MET/sumET
+                 MET_cut_max_MET_sumET=None, MET_cut_min_MET=45, 
                  trigger_min_pt=0, # event-level, trigger cut
                  trigger_type=None, trigger_flag_prefix="PFJet", trigger_all_pts=None,
                  
@@ -55,6 +55,8 @@ class OHProcessor(processor.ProcessorABC):
                  use_tag_probe=True, tag_probe_tag_min_pt=0,
                  tag_probe_max_alpha=1.0,
                  tag_probe_match_tag=False,
+                 off_MET_name="PuppiMET", # MET for MPF calculation
+                 on_MET_name=None,
                  
                  max_deltaR=0.2, # for deltaR matching
                  max_leading_jet=2, # select up to n leading jets to fill histograms
@@ -70,14 +72,10 @@ class OHProcessor(processor.ProcessorABC):
                  # gen-jet selection if fill_gen is True
                  gen_jet_name=None,
                  gen_jet_label="Gen",
-                 gen_jet_Id=None,
                  gen_jet_veto_map_json_path=None,
                  gen_jet_veto_map_correction_name=None,
                  gen_jet_veto_map_year=None,
                  gen_jet_veto_map_type="jetvetomap",
-                 gen_jet_tag_probe=True,
-                 gen_jet_tag_min_pt=0,
-                 gen_jet_max_alpha=1.0,
                  
                  ave_jet=False, # compute (offline pt + online pt) / 2
                  use_weight=True, # (only MC)
@@ -86,7 +84,7 @@ class OHProcessor(processor.ProcessorABC):
                  verbose=0):
         
         # which online and offline to use
-        # name is used to retrieve 
+        # name is used to retrieve from NanoAOD
         # label is used for histograms + plots
         self.off_jet_name = off_jet_name
         off_jet_label = off_jet_label if off_jet_label != None else off_jet_name
@@ -97,11 +95,11 @@ class OHProcessor(processor.ProcessorABC):
         
         # luminosity
         self.lumimask = LumiMaskSelector(lumi_json_path)
-        self.save_processed_lumi = save_processed_lumi if not compute_processed_lumi else True
-        self.compute_processed_lumi = compute_processed_lumi
-        if is_data and compute_processed_lumi:
-            assert lumi_csv_path != None, "Require brilcalc output csv to compute processed integrated luminosity."
-        self.lumi_csv_path = lumi_csv_path
+        self.save_processed_lumi = save_processed_lumi
+        #self.compute_processed_lumi = compute_processed_lumi
+        #if is_data and compute_processed_lumi:
+        #    assert lumi_csv_path != None, "Require brilcalc output csv to compute processed integrated luminosity."
+        #self.lumi_csv_path = lumi_csv_path
         
         # processing pipeline
         # event-level selections
@@ -111,9 +109,6 @@ class OHProcessor(processor.ProcessorABC):
         self.max_pv_rxy = MaxPV_rxy(max_PV_rxy=2)
         
         # flag_filters
-        #flag_filters = flag_filters if flag_filters else []
-        #flag_filters = [flag_filters] if isinstance(flag_filters, str) else flag_filters
-        #self.flag_filters = SelectorList([FlagFilter(flag_filter) for flag_filter in flag_filters])
         self.flag_filters = FlagFilters(flag_filters)
         
         # main PV matching
@@ -138,9 +133,8 @@ class OHProcessor(processor.ProcessorABC):
                                 discard_empty=True)
         
         # MET cut
-        self.MET_type = MET_type
-        #self.max_MET = MaxMET(max_MET, MET_type)
-        #self.max_MET_sumET = MaxMET_sumET(max_MET_sumET, min_MET, MET_type)
+        #self.max_MET = MaxMET(MET_cut_max_MET, MET_cut_MET_type)
+        self.max_MET_sumET = MaxMET_sumET(MET_cut_max_MET_sumET, MET_cut_min_MET, MET_cut_MET_type)
         
         # trigger cut
         self.min_trigger = MinTrigger(trigger_type, trigger_min_pt, trigger_flag_prefix, trigger_all_pts)
@@ -173,10 +167,10 @@ class OHProcessor(processor.ProcessorABC):
 #         self.on_jet_tagprobe = TriggerDijetTagAndProbe(on_jet_tag_min_pt if on_jet_tag_probe else None, 
 #                                                        max_alpha=on_jet_max_alpha, swap=True, name=on_jet_label)
         # tag and probe
-        self.onofftagprobe = OnlineOfflineDijetTagAndProbe(off_jet_name if use_tag_probe else None,
-                                                           on_jet_name, tag_min_pt=tag_probe_tag_min_pt,
-                                                           max_alpha=tag_probe_max_alpha,
-                                                           match_tag=tag_probe_match_tag)
+        self.onoff_tagprobe = OnlineOfflineDijetTagAndProbe(off_jet_name if use_tag_probe else None,
+                                                            on_jet_name, tag_min_pt=tag_probe_tag_min_pt,
+                                                            max_alpha=tag_probe_max_alpha,
+                                                            match_tag=tag_probe_match_tag)
         
         # delta R matching
         self.deltaR_matching = DeltaRMatching(max_deltaR=max_deltaR)
@@ -186,24 +180,28 @@ class OHProcessor(processor.ProcessorABC):
         
         
         # define eta bins
-#         eta_bin_dict = {
-#                             "fine": 
-#                                 [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
-#                                  -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
-#                                  -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
-#                                  -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
-#                                  -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
-#                                  0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
-#                                  1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
-#                                  2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
-#                                  4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
-#                             "coarse": 
-#                                 [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]
-#                              }
+        eta_bin_dict = {"fine": [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
+                                 -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
+                                 -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
+                                 -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
+                                 -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
+                                 0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
+                                 1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
+                                 2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
+                                 4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
+                        "coarse": [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]}
+        pt_bin_dict = {"fine": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 20, 23, 27, 30, 35, 40, 
+                                45, 57, 72, 90, 120, 150, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 
+                                3500, 4000, 4500, 5000, 10000],
+                       "coarse": [8, 10, 12, 15, 18, 21, 24, 28, 32, 37, 43, 49, 56, 64, 74, 84, 
+                                  97, 114, 133, 153, 174, 196, 220, 245, 272, 300, 362, 430,
+                                  507, 592, 686, 790, 905, 1032, 1172, 1327, 1497, 1684, 1890,
+                                  #1999, 2000, 2238, 2500, 2787, 3103, 3450,
+                                  2116, 2366, 2640, 2941, 3273, 3637, 4037, 4477, 4961, 5492, 6076, 7000]}
         
-#         assert same_eta_bin is None or same_eta_bin in self.eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
-#         self.same_eta_bin = SameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
-#                                        off_jet_name, on_jet_name)
+        assert same_eta_bin is None or same_eta_bin in self.eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
+        self.same_eta_bin = SameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
+                                       off_jet_name, on_jet_name)
         
         # histograms
         self.is_data = is_data
@@ -218,20 +216,10 @@ class OHProcessor(processor.ProcessorABC):
                                                   name=name, label=label),
                         "fine":
                             lambda num_bins=None, name="pt", label=r"$p_T$":
-                                hist.axis.Variable(
-                                    np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 20, 23, 27, 30, 35, 40, 
-                                              45, 57, 72, 90, 120, 150, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 
-                                              3500, 4000, 4500, 5000, 10000]), 
-                                    name=name, label=label),
+                                hist.axis.Variable(pt_bin_dict["fine"], name=name, label=label),
                         "coarse":
                             lambda num_bins=None, name="pt", label=r"$p_T$":
-                                hist.axis.Variable(
-                                    np.array([8, 10, 12, 15, 18, 21, 24, 28, 32, 37, 43, 49, 56, 64, 74, 84, 
-                                              97, 114, 133, 153, 174, 196, 220, 245, 272, 300, 362, 430,
-                                              507, 592, 686, 790, 905, 1032, 1172, 1327, 1497, 1684, 1890,
-                                              #1999, 2000, 2238, 2500, 2787, 3103, 3450,
-                                              2116, 2366, 2640, 2941, 3273, 3637, 4037, 4477, 4961, 5492, 6076, 7000]),
-                                    name=name, label=label),
+                                hist.axis.Variable(pt_bin_dict["coarse"], name=name, label=label),
                         "linear":
                             lambda num_bins=50, name="jet_pt", label=r"$p_T^{jet}$":
                                 hist.axis.Regular(num_bins, 0, 10000, name=name, label=label)
@@ -243,27 +231,19 @@ class OHProcessor(processor.ProcessorABC):
         
         eta_axis_dict = {
                          "fine": 
-                            lambda name="eta", label=r"$\eta$":
-                                hist.axis.Variable(
-                                    [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
-                                     -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
-                                     -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
-                                     -1.218,  -1.131,  -1.044,  -0.957,  -0.879, -0.783,  -0.696,  -0.609,  -0.522,
-                                     -0.435,  -0.348,  -0.261,  -0.174,  -0.087,  0,  0.087,  0.174, 0.261,  0.348,
-                                     0.435,  0.522,  0.609,  0.696,  0.783,  0.879,  0.957,  1.044,  1.131,  1.218, 
-                                     1.305,  1.392,  1.479,  1.566,  1.653,  1.74,  1.83,  1.93,  2.043,  2.172, 
-                                     2.322,  2.5,  2.65, 2.853,  2.964,  3.139,  3.314,  3.489, 3.664, 3.839, 4.013, 
-                                     4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
-                                    name=name, label=label),
+                            lambda num_bins=None, name="eta", label=r"$\eta$":
+                                hist.axis.Variable(eta_bin_dict["fine"], name=name, label=label),
                          "coarse":
-                            lambda name="eta", label=r"$\eta$":
-                                hist.axis.Variable([-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0], 
-                                                   name=name, label=label)
+                            lambda num_bins=None, name="eta", label=r"$\eta$":
+                                hist.axis.Variable(eta_bin_dict["coarse"], name=name, label=label),
+                         "linear":
+                            lambda num_bins=50, name="eta", label=r"$\eta$":
+                                hist.axis.Regular(50, -5, 5, name=name, label=label),
                         }
         assert eta_binning in eta_axis_dict, "Unrecognized eta_binning: {}".format(eta_binning)
         self.eta_binning = eta_binning
         self.get_eta_axis = lambda eta_binning, num_bins=50, name="jet_eta", label=r"$\eta^{jet}$": \
-                               eta_axis_dict[eta_binning](name, label) # syntactic sugar
+                               eta_axis_dict[eta_binning](num_bins, name, label) # syntactic sugar
         
         # fill_gen and generator
         self.fill_gen = fill_gen
@@ -271,13 +251,11 @@ class OHProcessor(processor.ProcessorABC):
             assert gen_jet_name != None, "Must provide gen jet name"
             self.gen_jet_name = gen_jet_name
             self.gen_jet_label = gen_jet_label if gen_jet_label else gen_jet_name
-            self.gen_jet_Id = JetIdentification(gen_jet_Id, gen_jet_label, verbose)
             self.gen_jet_veto_map = JetVetoMap(gen_jet_veto_map_json_path, gen_jet_veto_map_correction_name, 
                                                gen_jet_veto_map_year, gen_jet_veto_map_type, gen_jet_label)
-            self.gen_jet_tagprobe = TriggerDijetTagAndProbe(gen_jet_tag_min_pt if gen_jet_tag_probe else None, 
-                                                            max_alpha=gen_jet_max_alpha, swap=True, name=gen_jet_label)
-            self.gen_deltaR_matching = PairwiseDeltaRMatching(max_deltaR=max_deltaR)
-            
+            self.gen_on_off_deltaR_matching = PairwiseDeltaRMatching(max_deltaR=max_deltaR)
+        
+        # TODO: redefine these
         if isinstance(hist_to_fill, str):
             hist_to_fill = hist_to_fill.split()
         hist_to_fill = set(hist_to_fill)
@@ -291,18 +269,18 @@ class OHProcessor(processor.ProcessorABC):
             hist_to_fill.update(["tp_response", "tp_pt_balance", "tp_mpf"])
         self.hist_to_fill = hist_to_fill
         
+        if "tp_mpf" in self.hist_to_fill:
+            assert off_MET_name is not None, "Must provide offline MET name to use in MPF"
+            assert on_MET_name is not None, "Must provide online MET name to use in MPF"
+            self.off_MET_name = off_MET_name
+            self.on_MET_name = on_MET_name
+        
         # printing
         self.verbose = verbose
             
     def process(self, events):
         # bookkeeping for dataset's name
         dataset = events.metadata.get("dataset", "untitled")
-        
-        # use TrigObj for HLT Jets
-#         if "TrigObjJet" in [self.on_jet_name, self.off_jet_name]:
-#             events["TrigObjJet"] = events["TrigObj"][events["TrigObj"].id == 1] # Jet = 1
-#         if "TrigObjFatJet" in [self.on_jet_name, self.off_jet_name]:
-#             events["TrigObjFatJet"] = events["TrigObj"][events["TrigObj"].id == 6] # FatJet = 6
         
         # check consistency between is_data and input data
         has_gen = ("GenJet" in events.fields)
@@ -318,11 +296,11 @@ class OHProcessor(processor.ProcessorABC):
                 if self.verbose > 1:
                     print("sorting: {}".format(physics_object_name))
                 sort_index = ak.argsort(events[physics_object_name].pt, ascending=False)
-                #print(sort_index)
-                #is_already_sorted = all(sort_index[i] > sort_index[i+1] for i in range(len(sort_index) - 1))
-#                 if is_already_sorted:
-#                     print("{} is already sorted by pt!".format(physics_object_name))
-#                 else:
+                print(sort_index)
+                is_each_sorted = lambda x: all(x[i] < x[i+1] for i in range(len(x) - 1))
+                is_already_sorted = all(map(is_each_sorted, sort_index))
+                if is_already_sorted:
+                    print("{} is already sorted by pt!".format(physics_object_name))
                 events[physics_object_name] = (events[physics_object_name])[sort_index]
         
         # define cutflow
@@ -360,7 +338,7 @@ class OHProcessor(processor.ProcessorABC):
         
         # MET cuts
         #events = self.max_MET(events, cutflow)
-        #events = self.max_MET_sumET(events, cutflow)
+        events = self.max_MET_sumET(events, cutflow)
         
         # trigger cut
         events = self.min_trigger(events, cutflow)
@@ -395,7 +373,7 @@ class OHProcessor(processor.ProcessorABC):
         # tag and probe
         events[self.off_jet_name] = off_jets
         events[self.on_jet_name] = on_jets
-        events = self.onofftagprobe(events, cutflow)
+        events = self.onoff_tagprobe(events, cutflow)
         
         on_jets = events[self.on_jet_name]
         off_jets = events[self.off_jet_name]
@@ -413,21 +391,21 @@ class OHProcessor(processor.ProcessorABC):
                 gen_jets = gen_jets[at_least_two_gen_mask]
                 gen_jets_tag, gen_jets = self.gen_jet_tagprobe(gen_jets[:, 0], gen_jets[:, 1], gen_jets, cutflow)
                 gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
-                = self.gen_deltaR_matching([off_jets[at_least_two_gen_mask], on_jets[at_least_two_gen_mask], gen_jets], cutflow)
+                = self.gen_on_off_deltaR_matching([off_jets[at_least_two_gen_mask], on_jets[at_least_two_gen_mask], gen_jets], cutflow)
             else:
                 gen_matched_off_jets, gen_matched_on_jets, gen_matched_gen_jets \
-                = self.gen_deltaR_matching([off_jets, on_jets, gen_jets], cutflow)
+                = self.gen_on_off_deltaR_matching([off_jets, on_jets, gen_jets], cutflow)
         
         # select n leading jets to plot
         matched_off_jets = self.max_leading_jet(matched_off_jets)
         matched_on_jets = self.max_leading_jet(matched_on_jets)
         
         # same eta binning
-#         events[self.off_jet_name] = matched_off_jets
-#         events[self.on_jet_name] = matched_on_jets
-#         events = self.same_eta_bin(events, cutflow)
-#         matched_off_jets = events[self.off_jet_name]
-#         matched_on_jets = events[self.on_jet_name]
+        events[self.off_jet_name] = matched_off_jets
+        events[self.on_jet_name] = matched_on_jets
+        events = self.same_eta_bin(events, cutflow)
+        matched_off_jets = events[self.off_jet_name]
+        matched_on_jets = events[self.on_jet_name]
         
         # check before filling histogram
         assert len(matched_on_jets) == len(matched_off_jets), "online and offline must have the same length for histogram filling, but get online: {} and offline: {}".format(len(matched_on_jets), len(matched_off_jets))
@@ -581,6 +559,7 @@ class OHProcessor(processor.ProcessorABC):
             h_jet_pt = hist.Hist(dataset_axis, corrected_jet_type_axis, jet_pt_axis, storage=self.storage)
             out["jet_pt"] = h_jet_pt
         if "jet_eta" in self.hist_to_fill:
+            print(jet_eta_axis)
             h_jet_eta = hist.Hist(dataset_axis, jet_type_axis, jet_eta_axis, storage=self.storage)
             out["jet_eta"] = h_jet_eta
         if "jet_phi" in self.hist_to_fill:
@@ -758,7 +737,7 @@ class OHProcessor(processor.ProcessorABC):
             
         # tag and probe histogram
         # NB: these are unmatched (before deltaR matching)
-        if self.onofftagprobe.status and any([_.startswith("tp_") for _ in out.keys()]):
+        if self.onoff_tagprobe.status and any([_.startswith("tp_") for _ in out.keys()]):
             off_jets_probe = events[self.off_jet_name + "_probe"]
             on_jets_probe = events[self.on_jet_name + "_probe"]
             off_jets_tag = events[self.off_jet_name + "_tag"]
@@ -907,6 +886,7 @@ class OHProcessor(processor.ProcessorABC):
             # if (not self.is_data) and self.fill_gen: let's deal with this later
 
         if "jet_eta" in out:
+            print(repr(out["jet_eta"]))
             out["jet_eta"].fill(dataset=dataset, jet_type=self.off_jet_label, jet_eta=ak.flatten(matched_off_jets.eta),
                                 weight=weight)
             out["jet_eta"].fill(dataset=dataset, jet_type=self.on_jet_label, jet_eta=ak.flatten(matched_on_jets.eta),
