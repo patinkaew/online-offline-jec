@@ -188,7 +188,9 @@ class FlagFilters(SelectorABC):
             flag_filters = flag_filters.split()
         self._flag_filters = flag_filters
     def __str__(self):
-        return " ".join(self._flag_filters)
+        if self._flag_filters is None:
+            return "Flag"
+        return "Flag: {}".format(" ".join(self._flag_filters))
     def apply(self, events):
         if not self._flag_filters:
             return events
