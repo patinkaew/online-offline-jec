@@ -14,7 +14,7 @@ from coffea import processor
 from coffea import util as cutil
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
-from processor.processor import OHProcessor, SimpleProcessor
+from processor.processor import OnlineOfflineProcessor #, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
 from util import *
 
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     
     print("="*50)
     print("Process configuration to processor (Priority args > configs)")
-    processor_config = build_processor_config(OHProcessor, configs, args)
+    processor_config = build_processor_config(OnlineOfflineProcessor, configs, args)
     print("="*50)
     
     # change to list for printing
@@ -340,7 +340,8 @@ if __name__ == "__main__":
                 )
         
         # processing
-        processing(configs, runner, fileset_json_path, treename="Events", processor_instance=OHProcessor(**processor_config))
+        processing(configs, runner, fileset_json_path, treename="Events",
+                   processor_instance=OnlineOfflineProcessor(**processor_config))
         
     else: # distributed
         # currently only for lxplus
