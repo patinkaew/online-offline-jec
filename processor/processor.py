@@ -555,14 +555,17 @@ class OnlineOfflineProcessor(ProcessorABC):
                 print("no events to fill histograms")
             return out
         
+        off_jets = events[self.off_jet_name]
+        on_jets = events[self.on_jet_name]
+        
         # get event weight
         if (not self.is_data) and self.use_weight:
-            weight = ak.flatten(ak.broadcast_arrays(events.genWeight, matched_off_jets.pt)[0])
-            if self.fill_gen:
-                gen_matched_weight = ak.flatten(ak.broadcast_arrays(events.genWeight, gen_matched_off_jets.pt)[0])
+            weight = ak.flatten(ak.broadcast_arrays(events.genWeight, off_jets.pt)[0])
+            #if self.fill_gen:
+            #    gen_matched_weight = ak.flatten(ak.broadcast_arrays(events.genWeight, gen_matched_off_jets.pt)[0])
         else:
-            weight = None
-            gen_matched_weight = None
+            weight = 1.0
+            #gen_matched_weight = None
         
         # loop correction levels to fill histograms
 #         for (off_correction_level_name, on_correction_level_name), correction_level_label in correction_level_dict.items():
@@ -796,8 +799,6 @@ class OnlineOfflineProcessor(ProcessorABC):
                                       weight=off_tp_weight)
         
         # filling 1D histograms
-        off_jets = events[self.off_jet_name]
-        on_jets = events[self.on_jet_name]
         if "jet_pt" in out:
 #             for off_correction_level_name in off_correction_level_names:
 #                 out["jet_pt"].fill(dataset=dataset, 
