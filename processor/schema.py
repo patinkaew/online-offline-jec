@@ -34,7 +34,8 @@ class ScoutingJMENanoAODSchema(JMENanoAODSchema):
         **JMENanoAODSchema.mixins,
         "ScoutingJet": "Jet",
         "ScoutingFatJet": "FatJet",
-        "ScoutingRho": "Rho"
+        "ScoutingRho": "Rho",
+        "ScoutingMET": "MissingET"
     }
 #     all_cross_references = {
 #         **JMENanoAODSchema.all_cross_references,
