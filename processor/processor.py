@@ -48,9 +48,6 @@ class OnlineOfflineProcessor(ProcessorABC):
                  off_jet_veto_map_type="jetvetomap", on_jet_veto_map_type="jetvetomap",
                  off_jet_weight_filelist=None, on_jet_weight_filelist=None, # weight file for JEC
                  off_rho_name=None, on_rho_name=None, # rho to use in JEC
-                 off_jet_tag_probe=False, on_jet_tag_probe=False, # whether to apply tag and probe
-                 off_jet_tag_min_pt=0, on_jet_tag_min_pt=0, # tag min pt to apply during tag and probe
-                 off_jet_max_alpha=1.0, on_jet_max_alpha=1.0, # max alpha during tag and probe
                  use_tag_probe=True, tag_probe_tag_min_pt=0,
                  tag_probe_max_alpha=1.0,
                  tag_probe_third_jet_max_pt=30,
