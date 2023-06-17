@@ -300,10 +300,10 @@ class JetID(SelectorABC):
             "Unrecognized jet id: {}".format(jet_id)
         assert jet_type in ["PUPPI", "CHS"], "Unrecognized jet type: {}".format(jet_type)
         
+        self._jet_name = jet_name
         super().__init__(jet_id is not None)
         if jet_id is not None:
-            assert jet_name is not None, "Must specify jet name"
-            self._jet_name = jet_name
+            assert self._jet_name is not None, "Must specify jet name"
             self._jet_id = jet_id
             if isinstance(jet_id, str):
                 jet_id_bit_dict = {"loose":1, "tight":2, "tightleptonveto":4}
