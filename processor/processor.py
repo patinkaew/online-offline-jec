@@ -42,7 +42,8 @@ class OnlineOfflineProcessor(ProcessorABC):
                  
                  # jet-level selections
                  off_jet_min_pt=0, on_jet_min_pt=0, # jet-level, min pt
-                 off_jet_Id=None, on_jet_Id=None, # jet-level, jet id cut
+                 off_jet_id=None, on_jet_id=None, # jet-level, jet id cut
+                 off_jet_type="PUPPI", on_jet_type="CHS", # needed for jet id
                  off_jet_veto_map_json_path=None, on_jet_veto_map_json_path=None, # jet-level, jet veto map cut
                  off_jet_veto_map_correction_name=None, on_jet_veto_map_correction_name=None,
                  off_jet_veto_map_year=None, on_jet_veto_map_year=None, 
@@ -130,10 +131,8 @@ class OnlineOfflineProcessor(ProcessorABC):
         # intuitively, these selectors act on jet
         # however, cut earlier is better for performance
         # and make it easier to tag and probe
-        off_jet_identification = JetIdentification(off_jet_Id, off_jet_label, verbose)
-        self.off_jet_Id = EventWrappedPhysicsObjectSelector(off_jet_name, off_jet_identification, discard_empty=True)
-        on_jet_identification = JetIdentification(on_jet_Id, on_jet_label, verbose)
-        self.on_jet_Id = EventWrappedPhysicsObjectSelector(on_jet_name, on_jet_identification, discard_empty=True)
+        self.off_jet_Id = JetID(off_jet_name, off_jet_id, off_jet_type)
+        self.on_jet_Id = JetID(off_jet_name, off_jet_id, on_jet_type)
         
         off_jet_veto_map = JetVetoMap(off_jet_veto_map_json_path, off_jet_veto_map_correction_name, 
                                       off_jet_veto_map_year, off_jet_veto_map_type, off_jet_label)
