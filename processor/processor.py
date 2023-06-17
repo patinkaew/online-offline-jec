@@ -495,17 +495,12 @@ class OnlineOfflineProcessor(ProcessorABC):
 #             out["tp_diff_ratio"] = h_tp_diff_ratio
             
         if "tp_asymmetry" in self.hist_to_fill and self.onoff_tagprobe.status:
-#             tp_jet_type_axis = hist.axis.StrCategory([self.off_jet_label, self.on_jet_label], 
-#                                                       name="jet_type", label="Types of Jet", growth=False)
             tp_asymmetry_axis = hist.axis.Regular(200, -1, 1, name="tp_asymmetry", label=r"Tag and Probe Asymmetry $A$")
             out["tp_asymmetry"] = hist.Hist(dataset_axis, jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
                                             tp_asymmetry_axis, storage=self.storage,
                                             name="tp_asymmetry", label=r"Tag and Probe Asymmetry $A$")
             
         if "tp_metprojection" in self.hist_to_fill and self.onoff_tagprobe.status:
-#             tp_jet_type_axis = hist.axis.StrCategory([self.off_jet_label, self.on_jet_label, 
-#                                                       self.off_jet_label + " (Ave)", self.on_jet_label + " (Ave)"], 
-#                                                       name="jet_type", label="Types of Jet", growth=False)
             tp_metprojection_axis = hist.axis.Regular(200, -2, 2, name="tp_metprojection", 
                                                       label=r"Tag and Probe MET Projection $B$")
             out["tp_metprojection"] = hist.Hist(dataset_axis, jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
