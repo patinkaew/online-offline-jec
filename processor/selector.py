@@ -332,9 +332,9 @@ class JetID(SelectorABC):
                 elif self._jet_id == 7:
                     jet_id_name = "Tight TightLeptonVeto"
 
-        self._jet_id_name = jet_id_name
-        self._use_lepton_veto = self._jet_id >= 4
-        self._jet_type = jet_type if jet_type is not None else "PUPPI"
+            self._jet_id_name = jet_id_name
+            self._use_lepton_veto = self._jet_id >= 4
+            self._jet_type = jet_type if jet_type is not None else "PUPPI"
          
     def __str__(self):
         if self.status:

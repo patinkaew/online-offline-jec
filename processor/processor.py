@@ -132,7 +132,7 @@ class OnlineOfflineProcessor(ProcessorABC):
         # however, cut earlier is better for performance
         # and make it easier to tag and probe
         self.off_jet_Id = JetID(off_jet_name, off_jet_id, off_jet_type)
-        self.on_jet_Id = JetID(off_jet_name, off_jet_id, on_jet_type)
+        self.on_jet_Id = JetID(on_jet_name, on_jet_id, on_jet_type)
         
         off_jet_veto_map = JetVetoMap(off_jet_veto_map_json_path, off_jet_veto_map_correction_name, 
                                       off_jet_veto_map_year, off_jet_veto_map_type, off_jet_label)
