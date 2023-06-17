@@ -291,43 +291,150 @@ class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied ac
             return physics_objects
         return physics_objects[:, :self._max_leading]
 
-class JetIdentification(SelectorABC):
-    def __init__(self, jet_Id, name="", verbose=0):
-        super().__init__(jet_Id)
-        if jet_Id:
-            assert len(name) and name != None, "must provide unique name"
-            self._jet_Id = jet_Id
-            jet_Id_bit_dict = {"loose":1, "tight":2, "tightleptonveto":4}
-            if isinstance(jet_Id, str):
-                jet_Id = jet_Id.split()
-                if len(jet_Id) == 1:
-                    jet_Id = jet_Id[0]
-                    assert jet_Id.lower() in jet_Id_bit_dict.keys(), "cannot identify jet_Id {}".format(jet_Id)
-                    self._jet_Id = jet_Id_bit_dict[jet_Id.lower()]
+class JetID(SelectorABC):
+    def __init__(self, jet_name, jet_id, jet_type="PUPPI"):
+        assert jet_id is None\
+            or (isinstance(jet_id, int) and jet_id >=2 and jet_id <=7)\
+            or (isinstance(jet_id, str) and 
+                len({"tight", "tightleptonveto"}.intersection([_.lower() for _ in jet_id.split()]))),\
+            "Unrecognized jet id: {}".format(jet_id)
+        assert jet_type in ["PUPPI", "CHS"], "Unrecognized jet type: {}".format(jet_type)
+        
+        super().__init__(jet_id is not None)
+        if jet_id is not None:
+            assert jet_name is not None, "Must specify jet name"
+            self._jet_name = jet_name
+            self._jet_id = jet_id
+            if isinstance(jet_id, str):
+                jet_id_bit_dict = {"loose":1, "tight":2, "tightleptonveto":4}
+                jet_id_lst = jet_id.split()
+                if len(jet_id_lst) == 1:
+                    jet_id = jet_id_lst[0]
+                    assert jet_id.lower() in jet_id_bit_dict.keys(), "cannot identify jet_id {}".format(jet_id)
+                    self._jet_id = jet_id_bit_dict[jet_id.lower()]
                 else:
-                    self._jet_Id = 0
-                    for jet_id in jet_Id:
-                        assert jet_id.lower() in jet_Id_bit_dict.keys(), "cannot identify jet_Id {}".format(jet_id)
-                        self._jet_Id += jet_Id_bit_dict[jet_id.lower()] # bitwise-or in base 2 is add in base 10
-            elif isinstance(jet_Id, int):
-                assert 0 <= jet_Id <= 7, "jet_Id must be in [0, 7], but get {}".format(jet_Id)
-            else:
-                raise TypeError("expect jet_Id as int or str, but get {}".format(type(jet_Id)))
-        else:
-            self._jet_Id = None
-        self._name = name
-        self._verbose = verbose
+                    self._jet_id = 0
+                    for jet_id in jet_id_lst:
+                        assert jet_id.lower() in jet_id_bit_dict.keys(), "cannot identify jet_id {}".format(jet_id)
+                        self._jet_id += jet_id_bit_dict[jet_id.lower()] # bitwise-or in base 2 is add in base 10
+
+            if isinstance(self._jet_id, int):
+                if self._jet_id == 2:
+                    jet_id_name = "Tight"
+                elif self._jet_id == 3:
+                    jet_id_name = "Loose Tight"
+                elif self._jet_id == 4:
+                    jet_id_name = "TightLeptonVeto"
+                elif self._jet_id == 5:
+                    jet_id_name = "Loose TightLeptonVeto"
+                elif self._jet_id == 6:
+                    jet_id_name = "Tight TightLeptonVeto"
+                elif self._jet_id == 7:
+                    jet_id_name = "Tight TightLeptonVeto"
+
+        self._jet_id_name = jet_id_name
+        self._use_lepton_veto = self._jet_id >= 4
+        self._jet_type = jet_type if jet_type is not None else "PUPPI"
+         
     def __str__(self):
         if self.status:
-            return "{}: jet id {}".format(self._name, self._jet_Id)
+            return "{}: JetID {} ({})".format(self._jet_name, self._jet_id, self._jet_id_name)
         else:
-            return "{}: jet id".format(self._name)
-    def apply(self, jets):
-        if not "jetId" in jets.fields:
-            if self._verbose > 0:
-                warnings.warn("cannot retrieve jetId, no jetId will be applied")
-            return jets
-        return jets[jets.jetId == self._jet_Id]
+            return "{}: JetID".format(self._jet_name)
+        
+    def apply(self, events):
+        if events.metadata["isMC"]:
+            return events
+        
+        jets = events[self._jet_name]
+        if "jetId" in jets.fields:
+            jets = jets[jets.jetId >= self._jet_id]
+        else:
+            year = events.metadata["year"]
+            era = events.metadata["era"]
+
+            if (year == "2022" or year == 2022) and era in "BCDEFG":
+                # from https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetID13p6TeV
+                # change to notations used in JetID twiki
+                abs_eta = np.abs(jets.eta)
+
+                # it is unclear whether to use nConstElecs or nElectrons fields...
+                # from a quick test, it seems like jetId uses nConstElecs
+                nElectrons = jets["nConstElecs"] if "nConstElecs" in jets.fields else jets["nElectrons"]
+                # also for nConstMuons and nMuons...
+                # from a quick test, it seems like jetId uses nConstMuons
+                nMuons = jets["nConstMuons"] if "nConstMuons" in jets.fields else jets["nMuons"]
+                nPhotons = jets["nConstPhotons"] if "nConstPhotons" in jets.fields else jets["nPhotons"]
+                nCh = jets["nConstChHads"] if "nConstChHads" in jets.fields else jets["nCh"]
+                nNh = jets["nConstNeuHads"] if "nConstNeuHads" in jets.fields else jets["nNh"]
+
+                NumConst = jets["nConstituents"]
+                CHM = nCh + nElectrons + nMuons
+                CEMF = jets["chEmEF"]
+                CHF = jets["chHEF"]
+                NumNeutralParticle = nNh + nPhotons
+                NEMF = jets["neEmEF"]
+                NHF = jets["neHEF"]
+                MUF = jets["muEF"] if "muEF" in jets.fields else jets["muEmEF"]
+
+                if era in "BCDE":
+                    mask0 = (abs_eta<=2.6) & (CHM>0) & (CHF>0.01) & (NumConst>1) & (NEMF<0.9) & (NHF<0.9)
+                    if self._use_lepton_veto:
+                        mask0 = mask0 & (CEMF<0.8) & (MUF<0.8)
+                    
+                    mask1 = (abs_eta>2.6) & (abs_eta<=2.7) & (NEMF<0.99) & (NHF<0.9) 
+                    if self._use_lepton_veto:
+                        mask1 = mask1 & (CEMF<0.8) & (MUF<0.8)
+                    if self._jet_type == "CHS":
+                        mask1 = mask1 & (CHM>0)
+                    
+                    if self._jet_type == "PUPPI":
+                        mask2 = (abs_eta>2.7) & (abs_eta<=3.0) & (NHF<0.9999)
+                    else:
+                        mask2 = (abs_eta>2.7) & (abs_eta<=3.0) & (NEMF<0.99) & (NumNeutralParticle>1)
+                    
+                    if self._jet_type == "PUPPI":
+                        mask3 = (abs_eta>3.0) & (NEMF<0.90) & (NumNeutralParticle>=2)
+                    else:
+                        mask3 = (abs_eta>3.0) & (NEMF<0.90) & (NumNeutralParticle>10)
+                    mask = mask0 | mask1 | mask2 | mask3
+                    jets = jets[mask]
+                    
+                elif era in "FG":
+                    mask0 = (abs_eta<=2.6) & (CHM>0) & (CHF>0.01) & (NumConst>1) & (NEMF<0.9) & (NHF<0.99)
+                    if self._use_lepton_veto:
+                        mask0 = mask0 & (CEMF<0.8) & (MUF<0.8)
+                    
+                    mask1 = (abs_eta>2.6) & (abs_eta<=2.7) & (NEMF<0.99) & (NHF<0.9) 
+                    if self._use_lepton_veto:
+                        mask1 = mask1 & (CEMF<0.8) & (MUF<0.8)
+                    if self._jet_type == "CHS":
+                        mask1 = mask1 & (CHM>0)
+                    
+                    if self._jet_type == "PUPPI":
+                        mask2 = (abs_eta>2.7) & (abs_eta<=3.0) & (NHF<0.9999)
+                    else:
+                        mask2 = (abs_eta>2.7) & (abs_eta<=3.0) & (NEMF<0.99) & (NumNeutralParticle>1)
+                    
+                    if self._jet_type == "PUPPI":
+                        mask3 = (abs_eta>3.0) & (NEMF<0.90) & (NumNeutralParticle>=2)
+                    else:
+                        mask3 = (abs_eta>3.0) & (NEMF<0.90) & (NumNeutralParticle>10)
+                    
+                    mask = mask0 | mask1 | mask2 | mask3
+                    jets = jets[mask]
+                else:
+                    raise ValueError("Unrecognized era: 2022{}".format(era))
+                
+            else:
+                raise ValueError("Unrecognized year and era: {}{}".format(year, era))
+        
+        events[self._jet_name] = jets
+        events = events[ak.num(events[self._jet_name]) > 0]
+        
+        return events
+    def count(self, events):
+        return events[ak.num(events[self._jet_name]) > 0]
     
 class JetVetoMap(SelectorABC):
     def __init__(self, jet_veto_map_json_path, jet_veto_map_correction_name,
