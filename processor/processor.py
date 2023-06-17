@@ -5,6 +5,7 @@ import hist
 from coffea.processor import ProcessorABC
 from coffea.lumi_tools import LumiMask
 from coffea.analysis_tools import Weights
+from coffea.nanoevents.methods import vector
 
 from processor.selector import *
 from processor.accumulator import LumiAccumulator
@@ -50,6 +51,7 @@ class OnlineOfflineProcessor(ProcessorABC):
                  off_rho_name=None, on_rho_name=None, # rho to use in JEC
                  use_tag_probe=True, tag_probe_tag_min_pt=0,
                  tag_probe_max_alpha=1.0,
+                 tag_probe_max_deltaR=0.2,
                  tag_probe_third_jet_max_pt=30,
                  tag_probe_match_tag=False,
                  off_MET_name="PuppiMET", # MET for MPF calculation
@@ -149,17 +151,14 @@ class OnlineOfflineProcessor(ProcessorABC):
                                              rho_name=on_rho_name, verbose=verbose)
 
         # minimum jets pt
-        self.off_jet_min_pt = EventWrappedPhysicsObjectSelector(off_jet_name,
-                                ObjectMinPt(off_jet_min_pt, name=off_jet_label),
-                                discard_empty=True)
-        self.on_jet_min_pt = EventWrappedPhysicsObjectSelector(on_jet_name,
-                                ObjectMinPt(on_jet_min_pt, name=on_jet_label),
-                                discard_empty=True)
+        self.off_jet_min_pt = PhysicsObjectMinPt(off_jet_name, off_jet_min_pt)
+        self.on_jet_min_pt = PhysicsObjectMinPt(on_jet_name, on_jet_min_pt)
         
         # tag and probe
         self.onoff_tagprobe = OnlineOfflineDijetTagAndProbe(off_jet_name if use_tag_probe else None,
                                                             on_jet_name, tag_min_pt=tag_probe_tag_min_pt,
                                                             max_alpha=tag_probe_max_alpha,
+                                                            max_deltaR=tag_probe_max_deltaR,
                                                             match_tag=tag_probe_match_tag)
         
         # delta R matching
@@ -333,6 +332,11 @@ class OnlineOfflineProcessor(ProcessorABC):
         # jet energy correction
         events = self.off_jet_JEC(events, cutflow)
         events = self.on_jet_JEC(events, cutflow)
+        
+        # jets minimum pt
+        events = self.off_jet_min_pt(events, cutflow)
+        events = self.on_jet_min_pt(events, cutflow)
+        
 #         if self.off_jet_JEC.status:
 #             events, off_correction_level_in_use = self.off_jet_JEC(events, cutflow)
 #         else:
@@ -344,10 +348,6 @@ class OnlineOfflineProcessor(ProcessorABC):
 #         else:
 #             events = self.on_jet_JEC(events, cutflow)
 #             on_correction_level_in_use = {"orig"}
-
-       # jets minimum pt
-        events = self.off_jet_min_pt(events, cutflow)
-        events = self.on_jet_min_pt(events, cutflow)
         
         # tag and probe
         events = self.onoff_tagprobe(events, cutflow)
@@ -377,12 +377,13 @@ class OnlineOfflineProcessor(ProcessorABC):
         # same eta binning
         events = self.same_eta_bin(events, cutflow)
         
+        # check before filling histogram
+        assert len(events[self.off_jet_name]) == len(events[self.on_jet_name]), "online and offline must have the same length for histogram filling, but get online: {} and offline: {}".format(len(events[self.off_jet_name]), len(events[self.on_jet_name]))
+        events = events[ak.num(events[self.off_jet_name]) > 0] # remove empty events
+        
         ##############################################
         ########## Histogram Initialization ##########
         ##############################################
-        
-        # check before filling histogram
-        assert len(events[self.off_jet_name]) == len(events[self.on_jet_name]), "online and offline must have the same length for histogram filling, but get online: {} and offline: {}".format(len(events[self.off_jet_name]), len(events[self.on_jet_name]))
         
         # out accumulator
         out = {"cutflow": {dataset: cutflow}} # {dataset: cutflow}
