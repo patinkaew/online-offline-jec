@@ -95,9 +95,9 @@ class MinPhysicsObject(SelectorABC):
         super().__init__(min_physics_object > 0)
         self._physics_object_name = physics_object_name
         self._min_physics_object = min_physics_object
-        self._name = name if name != None or len(name) > 0 else physics_object_name
+        self._name = name if (len(name) > 0 and name is not None) else physics_object_name
     def __str__(self):
-        return "{} >= {}".format(self._name, self._min_physics_object)
+        return "Number of {} >= {}".format(self._name, self._min_physics_object)
     def apply(self, events):
         return events[(ak.num(events[self._physics_object_name]) >= self._min_physics_object)] 
 
@@ -434,7 +434,7 @@ class JetID(SelectorABC):
         
         return events
     def count(self, events):
-        return events[ak.num(events[self._jet_name]) > 0]
+        return np.sum(ak.num(events[self._jet_name]) > 0)
     
 class JetVetoMap(SelectorABC):
     def __init__(self, jet_veto_map_json_path, jet_veto_map_correction_name,

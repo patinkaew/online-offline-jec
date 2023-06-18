@@ -10,8 +10,15 @@ from coffea.nanoevents.methods import vector
 from processor.selector import *
 from processor.accumulator import LumiAccumulator
 
-from collections import defaultdict
+from collections import OrderedDict
 import warnings
+
+class OrderedDictWithDefaultInt(OrderedDict):
+    #https://stackoverflow.com/a/42404907
+    def __missing__(self, key):
+        value = 0
+        self[key] = value
+        return value
 
 # class SimpleProcessor(processor.ProcessorABC):
 #     def __init__(self):
@@ -117,8 +124,8 @@ class OnlineOfflineProcessor(ProcessorABC):
         # if tag and probe will be applied, need at least 2
         min_off_jet = min_off_jet #if not (off_jet_tag_probe or use_tag_probe) else max(min_off_jet, 2) 
         min_on_jet = min_on_jet #if not (on_jet_tag_probe or use_tag_probe) else max(min_on_jet, 2) 
-        self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet, name=off_jet_label)
-        self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet, name=on_jet_label)
+        self.min_off_jet = MinPhysicsObject(off_jet_name, min_off_jet)
+        self.min_on_jet = MinPhysicsObject(on_jet_name, min_on_jet)
         
         # MET cut
         #self.max_MET = MaxMET(MET_cut_max_MET, MET_cut_MET_type)
@@ -275,7 +282,7 @@ class OnlineOfflineProcessor(ProcessorABC):
     def process(self, events):
         # bookkeeping for dataset's name
         dataset = events.metadata.get("dataset", "untitled")
-        #is_data = events.metadata["is_data"]
+        #isMC = eval(isinstance(events.metadata["isMC"], str))
         
         # check consistency between is_data and input data
         has_gen = ("GenJet" in events.fields)
@@ -285,7 +292,7 @@ class OnlineOfflineProcessor(ProcessorABC):
             raise ValueError("Processor set to process MC, but does not contain gen information.")
         
         # define cutflow
-        cutflow = defaultdict(int)
+        cutflow = OrderedDictWithDefaultInt()
         cutflow["all events"] += len(events)
         
         # apply lumimask
