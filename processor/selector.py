@@ -296,6 +296,23 @@ class MaxLeadingObject(SelectorABC): #TODO: check when this should be applied ac
         if len(physics_objects) == 0:
             return physics_objects
         return physics_objects[:, :self._max_leading]
+    
+class MaxLeadingPhysicsObject(SelectorABC): #TODO: check when this should be applied actually. For T&P, this shouldn't matter
+    def __init__(self, physics_object_name, max_leading):
+        super().__init__(max_leading)
+        if max_leading:
+            assert len(physics_object_name) and physics_object_name != None, "Must specify physics object name"
+        self._max_leading = max_leading
+        self._physics_object_name = physics_object_name
+    def __str__(self):
+        return "{}: upto {} leading".format(self._physics_object_name, self._max_leading)
+    def apply(self, events):
+        physics_objects = events[self._physics_object_name]
+        physics_objects = physics_objects[:, :self._max_leading]
+        events[self._physics_object_name] = physics_objects
+        return events
+    def count(self, events):
+        return np.sum(ak.num(events[self._physics_object_name]) > 0)
 
 class JetID(SelectorABC):
     def __init__(self, jet_name, jet_id, jet_type="PUPPI"):
@@ -349,15 +366,12 @@ class JetID(SelectorABC):
             return "{}: JetID".format(self._jet_name)
         
     def apply(self, events):
-        if events.metadata["isMC"]:
-            return events
-        
         jets = events[self._jet_name]
         if "jetId" in jets.fields:
             jets = jets[jets.jetId >= self._jet_id]
         else:
-            year = events.metadata["year"]
-            era = events.metadata["era"]
+            year = events.metadata.get("year", 2022) # default to 2022F for now
+            era = events.metadata.get("era", "F")
 
             if (year == "2022" or year == 2022) and era in "BCDEFG":
                 # from https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetID13p6TeV
@@ -476,7 +490,7 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
                  max_alpha=1.0, third_jet_max_pt=30,
                  max_deltaR=0.2,
                  match_tag=False, save_original=False):
-        super().__init__(off_jet_name)
+        super().__init__(tag_min_pt is not None and tag_min_pt >=0)
         self._off_jet_name = off_jet_name
         self._on_jet_name = on_jet_name
         self._tag_min_pt = tag_min_pt
@@ -701,7 +715,7 @@ class JetEnergyCorrector(SelectorABC):
             jets["pt_raw"] = (1 - jets["rawFactor"]) * jets["pt"]
             jets["mass_raw"] = (1 - jets["rawFactor"]) * jets["mass"]
             # indicate that raw and orig are different (for filling hist)
-            #correction_level_in_use = {"raw", "orig"}
+            # correction_level_in_use = {"raw", "orig"}
         else:
             if self._verbose > 0:
                 warnings.warn("No rawFactor, treat as raw!")
@@ -746,116 +760,86 @@ class DeltaRMatching(SelectorABC):
         self._first_physics_object_name = first_physics_object_name
         self._second_physics_object_name = second_physics_object_name
         self._save_original = save_original
-        
+    
     def __str__(self):
-        return "delta R < {}".format(self._max_deltaR)
+        return "{} {}: delta R < {}".format(self._first_physics_object_name, self._second_physics_object_name, self._max_deltaR) 
 
     def apply(self, events):
         first_physics_object = events[self._first_physics_object_name]
         second_physics_object = events[self._second_physics_object_name]
         assert len(first_physics_object) == len(second_physics_object), "length of two physics objects must equal, but got {} and {}".format(len(first_physics_object), len(second_physics_object))
-        if len(first_physics_object) == 0:
-            return events
-        if self._save_original:
-            events[self._first_physics_object_name + "_unmatched"] = first_physics_object
-            events[self._second_physics_object_name + "_unmatched"] = second_physics_object
-#             if self._first_physics_object_name + "_tag" in events.fields:
-#                 events[self._tag_first_physics_object_name + "_unmatched"] = events[self._tag_first_physics_object_name]
-#             if self._second_physics_object_name + "_tag" in events.fields:  
-#                 events[self._tag_second_physics_object_name + "_unmatched"] = events[self._tag_second_physics_object_name]
-            
-        matched = ak.cartesian([first_physics_object , second_physics_object])
-        delta_R_one = matched.slot0.delta_r(matched.slot1) # compute delta r
-        matched_mask = (delta_R_one < self._max_deltaR) # create mask
-        matched = matched[matched_mask] # apply mask
-        events[self._first_physics_object_name] = matched.slot0
-        events[self._second_physics_object_name] = matched.slot1
-        return events
-    
-    def count(self, events):
-        return np.sum(ak.num(events[self._first_physics_object_name]) > 0)
-
-class TagProbeDeltaRMatching(SelectorABC):
-    def __init__(self, max_deltaR, first_physics_object_name, second_physics_object_name, 
-                 tag_first_physics_object_name=None, tag_second_physics_object_name=None, save_original=False):
-        super().__init__(max_deltaR)
-        self._max_deltaR = max_deltaR
-        self._first_physics_object_name = first_physics_object_name
-        self._second_physics_object_name = second_physics_object_name
-        self._tag_first_physics_object_name = tag_first_physics_object_name if tag_first_physics_object_name is not None\
-                                               else first_physics_object_name + "_tag" 
-        self._tag_second_physics_object_name = tag_second_physics_object_name if tag_second_physics_object_name is not None\
-                                               else second_physics_object_name + "_tag"
-        self._save_original = save_original
-    
-    def __str__(self):
-        return "T&P delta R < {}".format(self._max_deltaR) 
-
-    def apply(self, events):
-        first_physics_object = events[self._first_physics_object_name]
-        second_physics_object = events[self._second_physics_object_name]
-        tag_first_physics_object = events[self._tag_first_physics_object_name]
-        tag_second_physics_object = events[self._tag_second_physics_object_name]
-        assert len(first_physics_object) == len(second_physics_object), "length of two physics objects must equal, but got {} and {}".format(len(first_physics_object), len(second_physics_object))
-        assert len(first_physics_object) == len(tag_first_physics_object), "length of tag and probe of first physics objects must equal, but got {} and {}".format(len(first_physics_object), len(tag_first_physics_object))
-        assert len(second_physics_object) == len(tag_second_physics_object), "length of tag and probe of second physics objects must equal, but got {} and {}".format(len(second_physics_object), len(tag_second_physics_object))
         
         if len(first_physics_object) == 0:
             return events
         if self._save_original:
             events[self._first_physics_object_name + "_unmatched"] = first_physics_object
             events[self._second_physics_object_name + "_unmatched"] = second_physics_object
-            events[self._tag_first_physics_object_name + "_unmatched"] = tag_first_physics_object
-            events[self._tag_second_physics_object_name + "_unmatched"] = tag_second_physics_object
+            if self._first_physics_object_name + "_tag" in events.fields:
+                events[self._tag_first_physics_object_name + "_unmatched"] = events[self._tag_first_physics_object_name]
+            if self._second_physics_object_name + "_tag" in events.fields:  
+                events[self._tag_second_physics_object_name + "_unmatched"] = events[self._tag_second_physics_object_name]
         
         matched = ak.cartesian([first_physics_object, second_physics_object])
         delta_R_one = matched.slot0.delta_r(matched.slot1) # compute delta r
         matched_mask = (delta_R_one < self._max_deltaR) # create mask
-        tp_first_physics_object = ak.zip([first_physics_object, tag_first_physics_object]) # zip to pair (probe, tag)
-        tp_second_physics_object = ak.zip([second_physics_object, tag_second_physics_object])
-        tp_matched = ak.cartesian([tp_first_physics_object, tp_second_physics_object])
-        tp_matched = tp_matched[matched_mask] # apply mask
-        # unzip pair (probe, tag)
-        events[self._first_physics_object_name], events[self._tag_first_physics_object_name] = ak.unzip(tp_matched.slot0)
-        events[self._second_physics_object_name], events[self._tag_second_physics_object_name] = ak.unzip(tp_matched.slot1)
+        if self._first_physics_object_name + "_tag" in events.fields \
+            or self._second_physics_object_name + "_tag" in events.fields: # tag and probe applied
+            assert self._first_physics_object_name + "_tag" in events.fields \
+                and self._second_physics_object_name + "_tag" in events.fields, \
+                "If there is tag jets, there must be both tag jets for offline and online jets"
+            
+            tag_first_physics_object = events[self._first_physics_object_name+"_tag"]
+            tag_second_physics_object = events[self._second_physics_object_name+"_tag"]
+            
+            assert len(first_physics_object) == len(tag_first_physics_object), "length of tag and probe of first physics objects must equal, but got {} and {}".format(len(first_physics_object), len(tag_first_physics_object))
+            assert len(second_physics_object) == len(tag_second_physics_object), "length of tag and probe of second physics objects must equal, but got {} and {}".format(len(second_physics_object), len(tag_second_physics_object))
+
+            # zip to pair (probe, tag)
+            tp_first_physics_object = ak.zip([first_physics_object, tag_first_physics_object]) 
+            tp_second_physics_object = ak.zip([second_physics_object, tag_second_physics_object])
+            tp_matched = ak.cartesian([tp_first_physics_object, tp_second_physics_object])
+            tp_matched = tp_matched[matched_mask] # apply mask
+            # unzip pair (probe, tag)
+            events[self._first_physics_object_name], events[self._first_physics_object_name+"_tag"] = ak.unzip(tp_matched.slot0)
+            events[self._second_physics_object_name], events[self._second_physics_object_name+"_tag"] = ak.unzip(tp_matched.slot1)
+            
+        else: # tag and probe applied
+            matched = matched[matched_mask] # apply mask
+            events[self._first_physics_object_name] = matched.slot0
+            events[self._second_physics_object_name] = matched.slot1
         
+        events = events[ak.num(events[self._first_physics_object_name]) > 0]
         return events
     
     def count(self, events):
         return np.sum(ak.num(events[self._first_physics_object_name]) > 0)
     
 class PairwiseDeltaRMatching(SelectorABC):
-    def __init__(self, max_deltaR):
-        super().__init__()
+    def __init__(self, physics_object_names, max_deltaR):
+        super().__init__(max_deltaR)
         self._max_deltaR = max_deltaR
+        self._physics_object_names = physics_object_names
     def __str__(self):
-        return "pair-wise delta R < {}".format(self._max_deltaR) 
-    def apply_pairwise_deltaR_matching(self, arrays):
-        if len(arrays) == 0:
-            return arrays
-        for array in arrays:
-            assert len(array) == len(arrays[0]), "length of all physics objects must equal, but got {}".format(list(map(len, arrays)))
-        if len(arrays[0]) == 0:
-            return arrays
-        matched = ak.cartesian(arrays)
+        return "{}: delta R < {}".format(" ".join(self._physics_object_names), self._max_deltaR) 
+    def apply(self, events):
+        num_physics_objects = len(self._physics_object_names)
+        physics_objects = [events[name] for name in self._physics_object_names]
+        for i in range(num_physics_objects):
+            assert len(physics_objects[0]) == len(physics_objects[i]), "length of all physics objects must equal"
+        matched = ak.cartesian(physics_objects)
         counts = ak.num(matched)
         mask = ak.unflatten(np.full(np.sum(counts), True), counts) # all True mask
-        num_objects = len(arrays)
-        for first_slot, second_slot in itertools.combinations(map(str, range(num_objects)), 2):
+        
+        for first_slot, second_slot in itertools.combinations(map(str, range(num_physics_objects)), 2):
             mask = (mask & (matched[first_slot].delta_r(matched[second_slot]) < self._max_deltaR))
         matched = matched[mask] # apply mask
-        return tuple([matched[slot] for slot in map(str, range(num_objects))])
-    apply = apply_pairwise_deltaR_matching
+        for slot in range(num_physics_objects):
+            events[self._physics_object_names[slot]] = matched[str(slot)]
+        events = events[ak.num(events[self._physics_object_names[0]]) > 0]
+        return events
     
-    def __call__(self, arrays, cutflow=None):
-        if self.status:
-            arrays = self.apply(arrays)
-        if cutflow:
-            if self.status:
-                cutflow[str(self)] += np.sum(ak.num(arrays[0]) > 0)
-            else:
-                cutflow[str(self)+" (off)"] += np.sum(ak.num(arrays[0]) > 0)
-        return arrays
+    def count(self, events):
+        return np.sum(ak.num(events[self._physics_object_names[0]]) > 0)
     
 class SameBin(SelectorABC):
     def __init__(self, bins, first_physics_object_name, second_physics_object_name, physics_object_field):
@@ -866,7 +850,7 @@ class SameBin(SelectorABC):
         self._physics_object_field = physics_object_field
 
     def __str__(self):
-        return "Same {} bin".format(self._physics_object_field)
+        return "{} {}: Same {} bin".format(self._first_physics_object_name, self._second_physics_object_name, self._physics_object_field)
     
     def apply(self, events):
         first_physics_object = events[self._first_physics_object_name]
@@ -894,3 +878,41 @@ class SameBin(SelectorABC):
 class SameEtaBin(SameBin):
     def __init__(self, eta_bins, first_physics_object_name, second_physics_object_name):
         super().__init__(eta_bins, first_physics_object_name, second_physics_object_name, physics_object_field="eta")
+        
+class MultiPhysicsObjectSameBin(SelectorABC):
+    def __init__(self, bins, physics_object_names, physics_object_field):
+        super().__init__(bins is not None and len(physics_object_names) > 1)
+        self._bins = bins
+        self._physics_object_names = physics_object_names
+        self._physics_object_field = physics_object_field
+
+    def __str__(self):
+        return ": Same {} bin".format(" ".join(self._physics_object_names), self._physics_object_field)
+    
+    def apply(self, events):
+        num_physics_objects = len(self._physics_object_names)
+        physics_objects_field = [events[name][self._physics_object_field] for name in self._physics_object_names]
+        counts = ak.num(physics_objects_field[0])
+        for i in range(1, num_physics_objects):
+            assert ak.all((counts) == ak.num(physics_objects_field[i])), "length of both physics objects must be the same in every event"
+        get_bin_idx = lambda arr: ak.unflatten(np.searchsorted(self._bins, ak.to_numpy(ak.flatten(arr))), counts) 
+        physics_objects_field_bin_idx = [get_bin_idx(_) for _ in physics_objects_field]
+        
+        mask = (physics_objects_field_bin_idx[0] == physics_objects_field_bin_idx[1])
+        for i in range(2, num_physics_objects):
+            mask = mask & (physics_objects_field_bin_idx[0] == physics_objects_field_bin_idx[i])
+            
+        for physics_object_name in self._physics_object_names:
+            events[physics_object_name] = events[physics_object_name][mask]
+            # propagate mask to tag jets if any
+            if physics_object_name + "_tag" in events.fields:
+                events[physics_object_name + "_tag"] = events[physics_object_name + "_tag"][mask]
+        events = events[ak.num(events[self._physics_object_names[0]]) > 0]
+        return events
+    
+    def count(self, events):
+        return ak.sum((ak.num(events[self._physics_object_names[0]]) > 0))
+    
+class MultiPhysicsObjectSameEtaBin(MultiPhysicsObjectSameBin):
+    def __init__(self, eta_bins, physics_object_names):
+        super().__init__(eta_bins, physics_object_names, physics_object_field="eta")
