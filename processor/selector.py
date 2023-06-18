@@ -132,9 +132,9 @@ class MinTrigger(SelectorABC):
             raise ValueError("Invalid type of trigger cut")
     def __str__(self):
         if self.status:
-            return "trigger {}{} ({})".format(self._trigger_flag_prefix, self._trigger_min_pt, self._trigger_type)
+            return "Trigger {}{} ({})".format(self._trigger_flag_prefix, self._trigger_min_pt, self._trigger_type)
         else:
-            return "trigger"
+            return "Trigger"
     def apply(self, events):
         mask = events.HLT[self._trigger_flag_prefix + str(self._trigger_min_pt)] # single mask as base
         if self._trigger_all_pts != None and self._comparison_operation != None:
@@ -189,9 +189,12 @@ class MaxMET_sumET(SelectorABC):
         self._max_MET_sumET = max_MET_sumET
         self._min_MET = min_MET
     def __str__(self):
-        if self._min_MET <= 0:
-            return "{}/sumET < {}".format(self._MET_type, self._max_MET_sumET)
-        return "{} <= {} GeV or {}/sumET < {}".format(self._MET_type, self._min_MET, self._MET_type, self._max_MET_sumET)
+        if self.status:
+            if self._min_MET <= 0:
+                return "{}/sumET < {}".format(self._MET_type, self._max_MET_sumET)
+            return "{} <= {} GeV or {}/sumET < {}".format(self._MET_type, self._min_MET, self._MET_type, self._max_MET_sumET)
+        else:
+            return "MET/sumET"
     def apply(self, events):
         mask = (events[self._MET_type].pt < self._max_MET_sumET * events[self._MET_type].sumEt)
         if self._min_MET > 0:
@@ -243,7 +246,10 @@ class PhysicsObjectMinField(SelectorABC):
         events[self._physics_object_name] = events[self._physics_object_name][mask]
         if self._physics_object_name + "_tag" in events.fields:
             events[self._physics_object_name + "_tag"] = events[self._physics_object_name + "_tag"][mask]
+        events = events[ak.num(events[self._physics_object_name]) > 0]
         return events
+    def count(self, events):
+        return np.sum(ak.num(events[self._physics_object_name]) > 0)
 
 class PhysicsObjectMinPt(PhysicsObjectMinField):
     def __init__(self, physics_object_name, min_pt=0):
@@ -431,34 +437,38 @@ class JetID(SelectorABC):
         
         events[self._jet_name] = jets
         events = events[ak.num(events[self._jet_name]) > 0]
-        
         return events
+    
     def count(self, events):
         return np.sum(ak.num(events[self._jet_name]) > 0)
     
 class JetVetoMap(SelectorABC):
-    def __init__(self, jet_veto_map_json_path, jet_veto_map_correction_name,
-                 jet_veto_map_year, jet_veto_map_type="jetvetomap", name=""):
-        super().__init__(jet_veto_map_json_path)
-        if jet_veto_map_json_path:
-            assert len(name) and name != None, "must provide unique name"
-            corr = correctionlib.CorrectionSet.from_file(jet_veto_map_json_path)[jet_veto_map_correction_name]
-            self._jet_veto_map = partial(corr.evaluate, jet_veto_map_year, jet_veto_map_type)
-        self._name = name
+    def __init__(self, jet_name, jet_veto_map_path, map_type="jetvetomap"):
+        super().__init__(jet_veto_map_path)
+        self._jet_name = jet_name
+        if jet_veto_map_path:
+            assert len(jet_name) is not None, "Must specify jet name"
+            ext = extractor()
+            ext.add_weight_sets(["jetvetomap {} {}".format(map_type, jet_veto_map_path)])
+            ext.finalize()
+            self._jet_veto_map = ext.make_evaluator()
     def __str__(self):
-        return "{}: jet veto map".format(self._name)
-    def apply(self, jets):
+        return "{}: jet veto map".format(self._jet_name)
+    def apply(self, events):
         # hard coded eta range
-        jets = ObjectInEtaRange(-5.191, 5.191, mirror=False, name="|eta| < 5.191")(jets)
-        # flatten and unflatten (this is required for correctionlib API)
-        jets_flat = ak.flatten(jets)
-        counts = ak.num(jets)
-        jets_flat_phi = jets_flat.phi # wrap phi in (-pi, pi]
-        jets_flat_phi = ak.where(jets_flat_phi <= -np.pi, 2*np.pi + jets_flat_phi, jets_flat_phi)
-        jets_flat_phi = ak.where(jets_flat_phi > np.pi, -2*np.pi + jets_flat_phi, jets_flat_phi)
-        mask_flat = (self._jet_veto_map(ak.to_numpy(jets_flat.eta), ak.to_numpy(jets_flat_phi)) == 0)
-        mask = ak.unflatten(mask_flat, counts=counts)
-        return jets[mask]
+        jets = events[self._jet_name]
+        jets = jets[np.abs(jets.eta) <= 5.191]
+        # wrap phi in (-pi, pi]
+        jets_phi = jets.phi
+        jets_phi = ak.where(jets_phi <= -np.pi, 2*np.pi + jets_phi, jets_phi)
+        jets_phi = ak.where(jets_phi > np.pi, -2*np.pi + jets_phi, jets_phi)
+        veto_map = self._jet_veto_map["jetvetomap"](jets.eta, jets_phi) == 0
+        jets = jets[veto_map]
+        events[self._jet_name] = jets
+        events = events[ak.num(events[self._jet_name]) > 0]
+        return events
+    def count(self, events):
+        return np.sum(ak.num(events[self._jet_name]) > 0)
 
 ### tag and probe ###    
 class OnlineOfflineDijetTagAndProbe(SelectorABC):
@@ -856,7 +866,7 @@ class SameBin(SelectorABC):
         self._physics_object_field = physics_object_field
 
     def __str__(self):
-        return "same {} bin".format(self._physics_object_field)
+        return "Same {} bin".format(self._physics_object_field)
     
     def apply(self, events):
         first_physics_object = events[self._first_physics_object_name]

@@ -10,15 +10,18 @@ from coffea.nanoevents.methods import vector
 from processor.selector import *
 from processor.accumulator import LumiAccumulator
 
-from collections import OrderedDict
+from collections import OrderedDict#, Callable, defaultdict
 import warnings
+import json
 
 class OrderedDictWithDefaultInt(OrderedDict):
-    #https://stackoverflow.com/a/42404907
+    #Source: https://stackoverflow.com/a/42404907
     def __missing__(self, key):
         value = 0
         self[key] = value
         return value
+    def __repr__(self):
+        return json.dumps(dict(self), indent=4, sort_keys=False, default=str)
 
 # class SimpleProcessor(processor.ProcessorABC):
 #     def __init__(self):
@@ -51,10 +54,7 @@ class OnlineOfflineProcessor(ProcessorABC):
                  off_jet_min_pt=0, on_jet_min_pt=0, # jet-level, min pt
                  off_jet_id=None, on_jet_id=None, # jet-level, jet id cut
                  off_jet_type="PUPPI", on_jet_type="CHS", # needed for jet id
-                 off_jet_veto_map_json_path=None, on_jet_veto_map_json_path=None, # jet-level, jet veto map cut
-                 off_jet_veto_map_correction_name=None, on_jet_veto_map_correction_name=None,
-                 off_jet_veto_map_year=None, on_jet_veto_map_year=None, 
-                 off_jet_veto_map_type="jetvetomap", on_jet_veto_map_type="jetvetomap",
+                 off_jet_veto_map_path=None, on_jet_veto_map_path=None, # jet-level, jet veto map
                  off_jet_weight_filelist=None, on_jet_weight_filelist=None, # weight file for JEC
                  off_rho_name=None, on_rho_name=None, # rho to use in JEC
                  use_tag_probe=True, tag_probe_tag_min_pt=0,
@@ -141,13 +141,8 @@ class OnlineOfflineProcessor(ProcessorABC):
         self.off_jet_Id = JetID(off_jet_name, off_jet_id, off_jet_type)
         self.on_jet_Id = JetID(on_jet_name, on_jet_id, on_jet_type)
         
-        off_jet_veto_map = JetVetoMap(off_jet_veto_map_json_path, off_jet_veto_map_correction_name, 
-                                      off_jet_veto_map_year, off_jet_veto_map_type, off_jet_label)
-        self.off_jet_veto_map = EventWrappedPhysicsObjectSelector(off_jet_name, off_jet_veto_map, discard_empty=True)
-        
-        on_jet_veto_map = JetVetoMap(on_jet_veto_map_json_path, on_jet_veto_map_correction_name, 
-                                     on_jet_veto_map_year, on_jet_veto_map_type, on_jet_label)
-        self.on_jet_veto_map = EventWrappedPhysicsObjectSelector(on_jet_name, on_jet_veto_map, discard_empty=True)
+        self.off_jet_veto_map = JetVetoMap(off_jet_name, off_jet_veto_map_path, map_type="jetvetomap")
+        self.on_jet_veto_map = JetVetoMap(on_jet_name, on_jet_veto_map_path, map_type="jetvetomap")
         
         # jet-level selections
         # Jet Energy Correction
@@ -183,13 +178,13 @@ class OnlineOfflineProcessor(ProcessorABC):
              
         # define fixed pt and eta bins
         pt_bin_dict = {"fine": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 20, 23, 27, 30, 35, 40, 
-                        45, 57, 72, 90, 120, 150, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 
-                        3500, 4000, 4500, 5000, 10000],
-               "coarse": [8, 10, 12, 15, 18, 21, 24, 28, 32, 37, 43, 49, 56, 64, 74, 84, 
-                          97, 114, 133, 153, 174, 196, 220, 245, 272, 300, 362, 430,
-                          507, 592, 686, 790, 905, 1032, 1172, 1327, 1497, 1684, 1890,
-                          #1999, 2000, 2238, 2500, 2787, 3103, 3450,
-                          2116, 2366, 2640, 2941, 3273, 3637, 4037, 4477, 4961, 5492, 6076, 7000]}
+                                45, 57, 72, 90, 120, 150, 200, 300, 400, 550, 750, 1000, 1500, 2000, 2500, 3000, 
+                                3500, 4000, 4500, 5000, 10000],
+                       "coarse": [8, 10, 12, 15, 18, 21, 24, 28, 32, 37, 43, 49, 56, 64, 74, 84, 
+                                  97, 114, 133, 153, 174, 196, 220, 245, 272, 300, 362, 430,
+                                  507, 592, 686, 790, 905, 1032, 1172, 1327, 1497, 1684, 1890,
+                                  #1999, 2000, 2238, 2500, 2787, 3103, 3450,
+                                  2116, 2366, 2640, 2941, 3273, 3637, 4037, 4477, 4961, 5492, 6076, 7000]}
         eta_bin_dict = {"fine": [-5.191, -4.889,  -4.716,  -4.538,  -4.363,  -4.191,  -4.013,  -3.839,  -3.664,  
                                  -3.489, -3.314,  -3.139,  -2.964,  -2.853,  -2.65,  -2.5,  -2.322,  -2.172,  
                                  -2.043,  -1.93,  -1.83, -1.74,  -1.653,  -1.566,  -1.479,  -1.392,  -1.305,  
@@ -282,7 +277,9 @@ class OnlineOfflineProcessor(ProcessorABC):
     def process(self, events):
         # bookkeeping for dataset's name
         dataset = events.metadata.get("dataset", "untitled")
-        #isMC = eval(isinstance(events.metadata["isMC"], str))
+#         isMC = events.metadata["isMC"]
+#         if isinstance(isMC, str): 
+#             isMC = eval(isMC) 
         
         # check consistency between is_data and input data
         has_gen = ("GenJet" in events.fields)
@@ -292,7 +289,7 @@ class OnlineOfflineProcessor(ProcessorABC):
             raise ValueError("Processor set to process MC, but does not contain gen information.")
         
         # define cutflow
-        cutflow = OrderedDictWithDefaultInt()
+        cutflow = OrderedDictWithDefaultInt() #defaultdict(int)
         cutflow["all events"] += len(events)
         
         # apply lumimask
