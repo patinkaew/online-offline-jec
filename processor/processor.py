@@ -59,6 +59,8 @@ class OnlineOfflineProcessor(ProcessorABC):
                  off_rho_name=None, on_rho_name=None, # rho to use in JEC
                  tag_probe_tag_min_pt=0,
                  tag_probe_max_alpha=1.0,
+                 tag_probe_opposite_on_jet=False,
+                 tag_probe_on_off_ordering=1,
                  tag_probe_max_deltaR=0.2,
                  tag_probe_third_jet_max_pt=30,
                  tag_probe_match_tag=False,
@@ -202,12 +204,16 @@ class OnlineOfflineProcessor(ProcessorABC):
                                  4.191,  4.363,  4.538,  4.716,  4.889, 5.191],
                         "coarse": [-5.0, -3.0, -2.5, -1.3, 0.0, 1.3, 2.5, 3.0, 5.0]}
         
-        assert same_eta_bin is None or same_eta_bin in eta_bin_dict, "Unrecognized same_eta_bin: {}".format(same_eta_bin)
+        assert same_eta_bin is None or isinstance(same_eta_bin, bool) or same_eta_bin in eta_bin_dict, \
+            "Unrecognized same_eta_bin: {}".format(same_eta_bin)
+        # default to same as eta_binning, set same eta bin to False to disable
+        if same_eta_bin is None or same_eta_bin == True:
+            same_eta_bin = eta_binning
         if is_data or ((not is_data) and (not fill_gen)):
-            self.same_eta_bin = MultiPhysicsObjectSameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
+            self.same_eta_bin = MultiPhysicsObjectSameEtaBin(eta_bin_dict[same_eta_bin] if same_eta_bin else None, \
                                                              [off_jet_name, on_jet_name])
         else:
-            self.same_eta_bin = MultiPhysicsObjectSameEtaBin(None if same_eta_bin is None else eta_bin_dict[same_eta_bin], \
+            self.same_eta_bin = MultiPhysicsObjectSameEtaBin(eta_bin_dict[same_eta_bin] if same_eta_bin else None, \
                                                              [off_jet_name, on_jet_name, gen_jet_name])
 
         

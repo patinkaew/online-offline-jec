@@ -488,7 +488,8 @@ class JetVetoMap(SelectorABC):
 class OnlineOfflineDijetTagAndProbe(SelectorABC):
     def __init__(self, off_jet_name, on_jet_name, tag_min_pt, 
                  max_alpha=1.0, third_jet_max_pt=30,
-                 max_deltaR=0.2,
+                 opposite_on_jet=False, on_off_ordering=1,
+                 max_deltaR=0.2, 
                  match_tag=False, save_original=False):
         super().__init__(tag_min_pt is not None and tag_min_pt >=0)
         self._off_jet_name = off_jet_name
@@ -497,11 +498,13 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
         self._third_jet_max_pt = third_jet_max_pt
         self._max_alpha = max_alpha
         self._max_deltaR = max_deltaR
+        self._opposite_on_jet = opposite_on_jet
+        self._on_off_ordering = on_off_ordering
         self._match_tag = match_tag
         self._save_original = save_original
 
     def __str__(self):
-        return "Dijet T&P [T]: {} and {}".format(self._off_jet_name, self._on_jet_name)
+        return "Dijet T&P: {} and {}".format(self._off_jet_name, self._on_jet_name)
     def apply(self, events):        
         def trigger_dijet_tag_and_probe(tag, probe, others):
             # tag condition
@@ -546,47 +549,52 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
         # select back-to-back on offline
         # this will be done during tag-probe test on offline, regardless
         events = events[np.abs(events[self._off_jet_name][:, 0].phi - events[self._off_jet_name][:, 1].phi) > 2.7]
+        if self._opposite_on_jet:
+            events = events[np.abs(events[self._on_jet_name][:, 0].phi - events[self._on_jet_name][:, 1].phi) > 2.7]
 
-        # retrieve offline jets
-        #off_jets = events[self._off_jet_name][:, :3]
-        # retrieve online jets, ordering with dR closest to offline
-        #on_jets = events[self._on_jet_name][:, :3]
-        #on_jets = off_jets.nearest(events[self._on_jet_name])
+        # order online with offline jet
+        if self._on_off_ordering == 0:
+            off_jets = events[self._off_jet_name][:, :3]
+            on_jets = events[self._on_jet_name][:, :3]
+            
+        elif self._on_off_ordering == 1:
+            # simultaneously ordering leading and subleading jets
+            two_leading_delta_r = events[self._off_jet_name][:, :2].metric_table(events[self._on_jet_name][:, :2])
+            two_leading_sort_idx = ak.argmin(two_leading_delta_r, axis=2)
+            mask = two_leading_sort_idx[:, 0] != two_leading_sort_idx[:, 1] # there is ambiguity if two indices are the same
+            # apply mask
+            two_leading_sort_idx = two_leading_sort_idx[mask]
+            # propagate mask to events
+            events = events[mask]
+            # retrive offline jets
+            off_jets = events[self._off_jet_name][:, :3]
+            two_leading_on_jets = events[self._on_jet_name][:, :2][two_leading_sort_idx]
+            on_jets = ak.concatenate([two_leading_on_jets, events[self._on_jet_name][:, 2:3]], axis=1)
+            
+        elif self._on_off_ordering == 2:
+            # first, we consider the possibility that first and second online jets can be switched
+            # we pick subleading online jet from either first or second jets which has lower delta r
+            off_jets = events[self._off_jet_name][:, :3]
+            leading_on_jets_idx = ak.argmin(off_jets[:, 0].delta_r(events[self._on_jet_name][:, :2]), axis=1)
+            subleading_on_jets_idx = 1 - leading_on_jets_idx
+            two_leading_sort_idx = ak.concatenate([ak.unflatten(leading_on_jets_idx, 1), ak.unflatten(subleading_on_jets_idx, 1)],
+                                                  axis=1)
+            two_leading_on_jets = events[self._on_jet_name][:, :2][two_leading_sort_idx]
+            on_jets = ak.concatenate([two_leading_on_jets, events[self._on_jet_name][:, 2:3]], axis=1) # at third jet, if any
+            
+            # now consider possibility that second and third online jets can be switched
+            # similarly, we pick subleading online jet from either second or third jets which has lower delta r 
+            second_on_jets_idx = ak.argmin(off_jets[:, 1].delta_r(events[self._on_jet_name][:, 1:3]), axis=1)
+            third_on_jets_idx = 1 - second_on_jets_idx
+            second_on_jets_idx_unflatten = ak.unflatten(second_on_jets_idx, 1)
+            second_third_idx = ak.concatenate([second_on_jets_idx_unflatten, ak.unflatten(third_on_jets_idx, 1)], axis=1)
+            second_third_sort_idx = ak.where(ak.num(on_jets) == 2, second_on_jets_idx_unflatten, second_third_idx)
+            on_jets = ak.concatenate([on_jets[:, 0:1], on_jets[:, 1:3][second_third_sort_idx]], axis=1)
+            # we can also do the same for third and fourth jets...
+        else:
+            raise ValueError("Invalid offline online pre-matching: {}".format(self._on_off_ordering))
         
-        # retrieve online jets
-        # first, we consider the possibility that first and second online jets can be switched
-        # we pick subleading online jet from either first or second jets which has lower delta r
-#         off_jets = events[self._off_jet_name][:, :3]
-#         leading_on_jets_idx = ak.argmin(off_jets[:, 0].delta_r(events[self._on_jet_name][:, :2]), axis=1)
-#         subleading_on_jets_idx = 1 - leading_on_jets_idx
-#         two_leading_sort_idx = ak.concatenate([ak.unflatten(leading_on_jets_idx, 1), ak.unflatten(subleading_on_jets_idx, 1)],
-#                                               axis=1)
-#         two_leading_on_jets = events[self._on_jet_name][:, :2][two_leading_sort_idx]
-#         on_jets = ak.concatenate([two_leading_on_jets, events[self._on_jet_name][:, 2:3]], axis=1) # at third jet, if any
-#         # now consider possibility that second and third online jets can be switched
-#         # similarly, we pick subleading online jet from either second or third jets which has lower delta r 
-#         second_on_jets_idx = ak.argmin(off_jets[:, 1].delta_r(events[self._on_jet_name][:, 1:3]), axis=1)
-#         third_on_jets_idx = 1 - second_on_jets_idx
-#         second_on_jets_idx_unflatten = ak.unflatten(second_on_jets_idx, 1)
-#         second_third_idx = ak.concatenate([second_on_jets_idx_unflatten, ak.unflatten(third_on_jets_idx, 1)], axis=1)
-#         second_third_sort_idx = ak.where(ak.num(on_jets) == 2, second_on_jets_idx_unflatten, second_third_idx)
-#         on_jets = ak.concatenate([on_jets[:, 0:1], on_jets[:, 1:3][second_third_sort_idx]], axis=1)
-        # we can also do the same for third and fourth jets...
-    
-        # simultaneously ordering leading and subleading jets
-        two_leading_delta_r = events[self._off_jet_name][:, :2].metric_table(events[self._on_jet_name][:, :2])
-        two_leading_sort_idx = ak.argmin(two_leading_delta_r, axis=2)
-        mask = two_leading_sort_idx[:, 0] != two_leading_sort_idx[:, 1] # there is ambiguity if two indices are the same
-        # apply mask
-        two_leading_sort_idx = two_leading_sort_idx[mask]
-        # propagate mask to events
-        events = events[mask]
-        # retrive offline jets
-        off_jets = events[self._off_jet_name][:, :3]
-        two_leading_on_jets = events[self._on_jet_name][:, :2][two_leading_sort_idx]
-        on_jets = ak.concatenate([two_leading_on_jets, events[self._on_jet_name][:, 2:3]], axis=1)
-        
-        # now require that with this new ordering, leading and subleading are differed by at most 0.2
+        # now require that with this new ordering, leading and subleading are differed by at most max_deltaR, e.g. 0.2
         mask = (off_jets[:, :2].delta_r(on_jets[:, :2]) < self._max_deltaR)
         mask = mask[:, 0] & mask[:, 1]
         off_jets = off_jets[mask]
