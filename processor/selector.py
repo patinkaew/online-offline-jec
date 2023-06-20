@@ -895,7 +895,7 @@ class MultiPhysicsObjectSameBin(SelectorABC):
         self._physics_object_field = physics_object_field
 
     def __str__(self):
-        return ": Same {} bin".format(" ".join(self._physics_object_names), self._physics_object_field)
+        return "{} : Same {} bin".format(" ".join(self._physics_object_names), self._physics_object_field)
     
     def apply(self, events):
         num_physics_objects = len(self._physics_object_names)

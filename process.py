@@ -337,6 +337,8 @@ if __name__ == "__main__":
                 # do not set this when running the full analysis
                 # set this when testing
                 maxchunks=get_runner_config("maxchunks"),
+                # other arguments
+                skipbadfiles=True
                 )
         
         # processing
@@ -441,4 +443,4 @@ if __name__ == "__main__":
 
                 # processing
                 processing(configs, runner, fileset_json_path, treename="Events", 
-                           processor_instance=OHProcessor(**processor_config))
+                           processor_instance=OnlineOfflineProcessor(**processor_config))
