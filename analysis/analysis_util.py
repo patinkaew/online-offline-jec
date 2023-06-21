@@ -176,14 +176,14 @@ def integrate_histogram(h, axis, lower=0, upper=None, mirror=False): # experimen
 # None = do not integrate given axis
 # sum = integrate out axis
 # range = (lower, upper, mirror) which is passed to integrate_histogram
-def preprocess_histogram(h, dataset=None, correction_level=None, jet_type=None, 
+def preprocess_histogram(h, dataset=None, jet_type=None, #correction_level=None, 
                           eta_range=None, phi_range=None, pt_range=None):
     # build selection dict
     selection_dict = dict()
     if dataset:
         selection_dict["dataset"] = dataset
-    if correction_level:
-        selection_dict["correction_level"] = correction_level
+    #if correction_level:
+    #    selection_dict["correction_level"] = correction_level
     if jet_type:
         selection_dict["jet_type"] = jet_type
     if eta_range == sum:
@@ -338,6 +338,7 @@ def save_figure(fig, filename=None, dpi=100):
 def format_plt_plot(ax,
                     xscale=None, yscale=None,
                     xlim=None, ylim=None,
+                    xlabel=None, ylabel=None,
                     legend_title=None, legend_loc=0, legend_args=None):
     
     # axis scaling
@@ -359,6 +360,12 @@ def format_plt_plot(ax,
         if isinstance(ylim, dict):
             ax.set_ylim(**xlim)
     
+    # setting x-axis and y-axis label
+    if xlabel:
+        ax.set_xlabel(xlabel)
+    if ylabel: 
+        ax.set_ylabel(ylabel)
+        
     # formatting legend
     if legend_title:
         ax.legend(title=legend_title, loc=legend_loc)
@@ -397,12 +404,13 @@ def format_hep_plot(ax,
 def format_plot(fig, ax,
                 xscale=None, yscale=None,
                 xlim=None, ylim=None,
+                xlabel=None, ylabel=None,
                 legend_title=None, legend_loc=0, legend_args=None, 
                 hep_args=None, with_cms_name=True,
                 hep_magic=False,
                 filename=None, dpi=100):
     
-    format_plt_plot(ax, xscale=xscale, yscale=yscale, xlim=xlim, ylim=ylim, 
+    format_plt_plot(ax, xscale=xscale, yscale=yscale, xlim=xlim, ylim=ylim, xlabel=xlabel, ylabel=ylabel,
                     legend_title=legend_title, legend_loc=legend_loc, legend_args=legend_args)
     
     if hep_args or hep_magic:
