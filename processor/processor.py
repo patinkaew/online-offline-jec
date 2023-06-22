@@ -580,9 +580,9 @@ class OnlineOfflineProcessor(ProcessorABC):
             
         # 2d correlation histogram
         if "comparison" in self.hist_to_fill:
-            first_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+            first_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=50,
                                                  name="first_jet_pt", label=r"$p_T^{jet_1}$")
-            second_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+            second_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=50,
                                               name="second_jet_pt", label=r"$p_T^{jet_2}$")
             cmp_jet_types = [self.off_jet_label]
             if self.on_off_tagprobe.status:
