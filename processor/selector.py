@@ -597,7 +597,7 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
             on_jets = off_jets.nearest(events[self._on_jet_name])
             
         else:
-            raise ValueError("Invalid offline online pre-matching: {}".format(self._on_off_ordering))
+            raise ValueError("Invalid online pre-ordering with offline: {}".format(self._on_off_ordering))
         
         # now require that with this new ordering, leading and subleading are differed by at most max_deltaR, e.g. 0.2
         mask = (off_jets[:, :2].delta_r(on_jets[:, :2]) < self._max_deltaR)
