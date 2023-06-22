@@ -627,11 +627,11 @@ class OnlineOfflineProcessor(ProcessorABC):
             
             
         if "tp_comparison" in self.hist_to_fill and self.on_off_tagprobe.status and self.on_off_tagprobe._match_tag:
-            tag_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+            tag_jet_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=50,
                                                name="tag_jet_pt", label=r"$p_T^{%s, tag}$"%self.off_jet_label)
-            off_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+            off_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=50,
                                                name="off_jet_probe_pt", label=r"$p_T^{%s, probe}$"%self.off_jet_label)
-            on_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=100,
+            on_jet_probe_pt_axis = self.get_pt_axis(self.pt_binning, num_bins=50,
                                               name="on_jet_probe_pt", label=r"$p_T^{%s, probe}$"%self.on_jet_label)
             out["tp_comparison"] = hist.Hist(dataset_axis, jet_eta_axis, tag_jet_pt_axis, 
                                              off_jet_probe_pt_axis, on_jet_probe_pt_axis, storage=self.storage,
