@@ -591,6 +591,11 @@ class OnlineOfflineDijetTagAndProbe(SelectorABC):
             second_third_sort_idx = ak.where(ak.num(on_jets) == 2, second_on_jets_idx_unflatten, second_third_idx)
             on_jets = ak.concatenate([on_jets[:, 0:1], on_jets[:, 1:3][second_third_sort_idx]], axis=1)
             # we can also do the same for third and fourth jets...
+            
+        elif self._on_off_ordering == 3:
+            off_jets = events[self._off_jet_name][:, :3]
+            on_jets = off_jets.nearest(events[self._on_jet_name])
+            
         else:
             raise ValueError("Invalid offline online pre-matching: {}".format(self._on_off_ordering))
         
