@@ -14,7 +14,7 @@ from coffea import processor
 from coffea import util as cutil
 
 from coffea.nanoevents import NanoAODSchema, NanoEventsFactory
-from processor.processor import OHProcessor#, SimpleProcessor
+from processor.processor import OnlineOfflineProcessor #, SimpleProcessor
 from processor.schema import JMENanoAODSchema, ScoutingJMENanoAODSchema
 from util import *
 
@@ -109,8 +109,8 @@ def build_fileset(input_paths, dataset_names=None,
         dataset_name = dataset_names[i]
         
         if os.path.isdir(input_path):
-            dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[0])
             filelist = get_filelist(input_path)
+            dataset_name = dataset_name if dataset_name != "*" else get_default_dataset_name(filelist[0])
             fileset[dataset_name] += filelist
         elif os.path.isfile(input_path): # is file
             if input_path.endswith(".txt"):
@@ -224,11 +224,6 @@ def processing(configs, runner, fileset, processor_instance, treename="Events"):
 #     testmatch    = 3 days
 #     nextweek     = 1 week
 
-#print()
-user = os.getcwd().split('/')[4]
-#print("/eos/user/{}/{}/condor/log".format(user[0], user))
-#print()
-
 io_default_config = [("input_paths", ""),
                      ("dataset_names", None),
                      ("check_bad_files", False),
@@ -237,6 +232,7 @@ io_default_config = [("input_paths", ""),
                      ("base_output_dir", "")
                     ]
 
+user = os.getcwd().split('/')[4]
 runner_default_config = [("executor", "iterative"),
                          ("num_workers", 1),
                          ("chunksize", 100_000),
@@ -297,7 +293,7 @@ if __name__ == "__main__":
     
     print("="*50)
     print("Process configuration to processor (Priority args > configs)")
-    processor_config = build_processor_config(OHProcessor, configs, args)
+    processor_config = build_processor_config(OnlineOfflineProcessor, configs, args)
     print("="*50)
     
     # change to list for printing
@@ -342,10 +338,13 @@ if __name__ == "__main__":
                 # do not set this when running the full analysis
                 # set this when testing
                 maxchunks=get_runner_config("maxchunks"),
+                # other arguments
+                skipbadfiles=True
                 )
         
         # processing
-        processing(configs, runner, fileset_json_path, treename="Events", processor_instance=OHProcessor(**processor_config))
+        processing(configs, runner, fileset_json_path, treename="Events",
+                   processor_instance=OnlineOfflineProcessor(**processor_config))
         
     else: # distributed
         # currently only for lxplus
@@ -445,4 +444,4 @@ if __name__ == "__main__":
 
                 # processing
                 processing(configs, runner, fileset_json_path, treename="Events", 
-                           processor_instance=OHProcessor(**processor_config))
+                           processor_instance=OnlineOfflineProcessor(**processor_config))
