@@ -238,7 +238,92 @@ def extract_correction_level(correction_level):
 ##############################
 ### Statistics and Fitting ###
 ##############################
-def compute_stats(h, axis=-1, compute_median=True, compute_mode=False, approx_median=False, approx_mode=False):
+def profile_mean(h, axis):
+    return h.profile(axis)
+
+def profile_median(h, axis):
+    #if h.kind != bh.Kind.COUNT:
+    #    raise TypeError("Profile requires a COUNT histogram")
+
+    axes = list(h.axes)
+    iaxis = axis if isinstance(axis, int) else h._name_to_index(axis)
+    axes.pop(iaxis)
+
+    values = h.values()
+    tmp_variances = h.variances()
+    variances = tmp_variances if tmp_variances is not None else values
+    centers = h.axes[iaxis].centers
+
+    count = np.sum(values, axis=iaxis)
+
+    num = np.tensordot(values, centers, ([iaxis], [0]))
+    num_err = np.sqrt(np.tensordot(variances, centers**2, ([iaxis], [0])))
+
+    den = np.sum(values, axis=iaxis)
+    den_err = np.sqrt(np.sum(variances, axis=iaxis))
+    
+    centers = h.axes[iaxis].centers
+    edges = h.axes[iaxis].edges
+    widths = h.axes[iaxis].widths
+    
+    freqs = h.values()
+    total = np.sum(freqs, axis=iaxis, keepdims=True)
+    cmf = np.cumsum(freqs, axis=iaxis)
+    med_bin_idx = np.sum(cmf < total/2, axis=iaxis, keepdims=True)
+    med_cmf_before = np.take_along_axis(cmf, med_bin_idx-1, axis=iaxis)
+    med_freq = np.take_along_axis(freqs, med_bin_idx, axis=iaxis)
+    med_freq = np.where(med_freq==0, np.nan, med_freq)
+    median = edges[med_bin_idx] + (total/2 - med_cmf_before) * widths[med_bin_idx] / med_freq
+    median = median.squeeze()
+    
+    # approximate with 1.2533 * mean_variances
+    with np.errstate(invalid="ignore"):
+        new_values = median
+        new_variances = (num_err / den) ** 2 - (den_err * num / den**2) ** 2
+        new_variances *= (1.2533**2)
+
+    retval = h.__class__(*axes, storage=hist.storage.Mean())
+    retval[...] = np.stack([count, new_values, count * new_variances], axis=-1)
+    
+    return retval
+
+def compute_stats(h, axis, compute_median=True, approx_median=False):
+    iaxis = axis if isinstance(axis, int) else h._name_to_index(axis)
+    centers = h.axes[iaxis].centers
+    edges = h.axes[iaxis].edges
+    widths = h.axes[iaxis].widths
+    
+    freqs = h.values()
+    total = np.sum(freqs, axis=iaxis, keepdims=True)
+    cmf = np.cumsum(freqs, axis=iaxis)
+    
+    # compute mean
+    h_pf = h.profile(iaxis)
+    ave = h_pf.values()
+    var = h_pf.variances()
+    stdev = np.sqrt(var)
+    mean_error = stdev #np.where(total.squeeze() > 0, stdev / np.sqrt(total).squeeze(), 0)
+    
+    # compute median
+    median = None
+    if compute_median:
+        med_bin_idx = np.sum(cmf < total/2, axis=iaxis, keepdims=True)
+        if approx_median:
+            median = centers[med_bin_idx] # approx with center
+            median = np.where(total > 0, median, np.nan)
+        else:
+            med_cmf_before = np.take_along_axis(cmf, med_bin_idx-1, axis=iaxis)
+            med_freq = np.take_along_axis(freqs, med_bin_idx, axis=iaxis)
+            med_freq = np.where(med_freq==0, np.nan, med_freq)
+            median = edges[med_bin_idx] + (total/2 - med_cmf_before) * widths[med_bin_idx] / med_freq
+    median = median.squeeze()
+    median_error = 1.2533 * mean_error
+    
+    return {"centers": centers, "freqs": freqs, "mean": ave, \
+            "stdev": stdev, "var": var, "mean_error": mean_error, \
+            "median": median, "median_error": median_error}
+    
+def compute_stats_old(h, axis=-1, compute_median=True, compute_mode=False, approx_median=False, approx_mode=False):
     # retrieve axis and bin information
     if isinstance(axis, str):
         axis = get_axis_index(h, axis)
@@ -248,7 +333,7 @@ def compute_stats(h, axis=-1, compute_median=True, compute_mode=False, approx_me
     widths = h_axis.widths
     
     # retrieve counts (np.array)
-    freqs = h.counts()
+    freqs = h.values()
     freqs = np.swapaxes(freqs, axis, -1) # swap to last
     total = np.sum(freqs, axis=-1)
     cmf = np.cumsum(freqs, axis=-1)
