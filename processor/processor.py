@@ -613,15 +613,20 @@ class OnlineOfflineProcessor(ProcessorABC):
                                            name="tp_response", label=r"Tag and Probe $p_T$ response")
             
         if "tp_asymmetry" in self.hist_to_fill and self.on_off_tagprobe.status:
+            tp_jet_types = jet_types + [self.off_jet_label+"_ave", self.on_jet_label+"_ave"]
+            tp_jet_type_axis = hist.axis.StrCategory(tp_jet_types, name="jet_type", label="Types of Jet", growth=False)
             tp_asymmetry_axis = hist.axis.Regular(100, -1, 1, name="tp_asymmetry", label=r"Tag and Probe Asymmetry $A$")
-            out["tp_asymmetry"] = hist.Hist(dataset_axis, jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
+            out["tp_asymmetry"] = hist.Hist(dataset_axis, tp_jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
                                             tp_asymmetry_axis, storage=self.storage,
                                             name="tp_asymmetry", label=r"Tag and Probe Asymmetry $A$")
             
         if "tp_metprojection" in self.hist_to_fill and self.on_off_tagprobe.status:
+            tp_jet_types = jet_types + [self.off_jet_label+"_ave", self.on_jet_label+"_ave"]
+            tp_jet_types += [self.on_jet_label+"_on-mod-off", self.on_jet_label+"_on-mod-off_ave"]
+            tp_jet_type_axis = hist.axis.StrCategory(tp_jet_types, name="jet_type", label="Types of Jet", growth=False)
             tp_metprojection_axis = hist.axis.Regular(100, -2, 2, name="tp_metprojection", 
                                                       label=r"Tag and Probe MET Projection $B$", flow=True)
-            out["tp_metprojection"] = hist.Hist(dataset_axis, jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
+            out["tp_metprojection"] = hist.Hist(dataset_axis, tp_jet_type_axis, jet_pt_axis, jet_eta_axis, #jet_phi_axis,
                                                 tp_metprojection_axis, storage=self.storage,
                                                 name="tp_metprojection", label=r"Tag and Probe MET Projection $B$")
             
@@ -992,6 +997,12 @@ class OnlineOfflineProcessor(ProcessorABC):
         if "tp_asymmetry" in out:           
             off_asymmetry = (off_jets_probe.pt - off_jets_tag.pt) / off_jets_tagprobe_sum_pt
             out["tp_asymmetry"].fill(dataset=dataset, jet_type=self.off_jet_label,
+                                     jet_pt=ak.flatten(off_jets_tag.pt),
+                                     jet_eta=ak.flatten(off_jets_tag.eta),
+                                     #jet_phi=ak.flatten(off_jets_tag.phi),
+                                     tp_asymmetry=ak.flatten(off_asymmetry),
+                                     weight=off_tp_weight)
+            out["tp_asymmetry"].fill(dataset=dataset, jet_type=self.off_jet_label+"_ave",
                                      jet_pt=ak.flatten(off_jets_tagprobe_ave_pt),
                                      jet_eta=ak.flatten(off_jets_tag.eta),
                                      #jet_phi=ak.flatten(off_jets_tag.phi),
@@ -1000,6 +1011,12 @@ class OnlineOfflineProcessor(ProcessorABC):
             
             on_asymmetry = (on_jets_probe.pt - on_jets_tag.pt) / on_jets_tagprobe_sum_pt
             out["tp_asymmetry"].fill(dataset=dataset, jet_type=self.on_jet_label,
+                                      jet_pt=ak.flatten(on_jets_tag.pt),
+                                      jet_eta=ak.flatten(on_jets_tag.eta),
+                                      #jet_phi=ak.flatten(on_jets_tag.phi),
+                                      tp_asymmetry=ak.flatten(on_asymmetry),
+                                      weight=on_tp_weight)
+            out["tp_asymmetry"].fill(dataset=dataset, jet_type=self.on_jet_label+"_ave",
                                       jet_pt=ak.flatten(on_jets_tagprobe_ave_pt),
                                       jet_eta=ak.flatten(on_jets_tag.eta),
                                       #jet_phi=ak.flatten(on_jets_tag.phi),
@@ -1009,6 +1026,12 @@ class OnlineOfflineProcessor(ProcessorABC):
         if "tp_metprojection" in out:
             off_metprojection = ((events[self.off_MET_name].dot(off_jets_tag))/off_jets_tag.pt) / off_jets_tagprobe_sum_pt
             out["tp_metprojection"].fill(dataset=dataset, jet_type=self.off_jet_label,
+                                         jet_pt=ak.flatten(off_jets_tag.pt),
+                                         jet_eta=ak.flatten(off_jets_tag.eta),
+                                         #jet_phi=ak.flatten(off_jets_tag.phi),
+                                         tp_metprojection=ak.flatten(off_metprojection),
+                                         weight=off_tp_weight)
+            out["tp_metprojection"].fill(dataset=dataset, jet_type=self.off_jet_label+"_ave",
                                          jet_pt=ak.flatten(off_jets_tagprobe_ave_pt),
                                          jet_eta=ak.flatten(off_jets_tag.eta),
                                          #jet_phi=ak.flatten(off_jets_tag.phi),
@@ -1016,13 +1039,47 @@ class OnlineOfflineProcessor(ProcessorABC):
                                          weight=off_tp_weight)
             
             # on_MET = - (on_pt1 + on_pt2 + on_pt3); on_pt3 is vector sum of everything else
-            # modified_on_MET = - (on_pt1 + on_pt2 + on_pt3) - off_pt1 + on_pt1
-            on_jets_1 = on_jets_tag.nearest(events[self.on_jet_name + "_without_tagprobe"][:, :2])
-            modified_on_MET = events[self.on_MET_name] - on_jets_tag + on_jets_1
+            # off_modified_on_MET = - (on_pt1 + on_pt2 + on_pt3) - off_pt1 + on_pt1
+#             if self.on_off_tagprobe._on_off_ordering == 0:
+#                 on_jets_1 = events[self.on_jet_name + "_without_tagprobe"][:, :2]
+            if self.on_off_tagprobe._on_off_ordering == 1:
+                on_jets_1 = on_jets_tag.nearest(events[self.on_jet_name + "_without_tagprobe"][:, :2])
+            else: #self.on_off_tagprobe._on_off_ordering == 3:
+                on_jets_1 = on_jets_tag.nearest(events[self.on_jet_name + "_without_tagprobe"])
+            off_modified_on_MET = events[self.on_MET_name] - on_jets_tag + on_jets_1
             
-            on_metprojection = ((modified_on_MET.dot(on_jets_tag))/on_jets_tag.pt) / on_jets_tagprobe_sum_pt
-            
+            on_metprojection = ((off_modified_on_MET.dot(on_jets_tag))/on_jets_tag.pt) / on_jets_tagprobe_sum_pt  
             out["tp_metprojection"].fill(dataset=dataset, jet_type=self.on_jet_label,
+                                         jet_pt=ak.flatten(on_jets_tag.pt),
+                                         jet_eta=ak.flatten(on_jets_tag.eta),
+                                         #jet_phi=ak.flatten(on_jets_tag.phi),
+                                         tp_metprojection=ak.flatten(on_metprojection),
+                                         weight=on_tp_weight)
+            out["tp_metprojection"].fill(dataset=dataset, jet_type=self.on_jet_label+"_ave",
+                                         jet_pt=ak.flatten(on_jets_tagprobe_ave_pt),
+                                         jet_eta=ak.flatten(on_jets_tag.eta),
+                                         #jet_phi=ak.flatten(on_jets_tag.phi),
+                                         tp_metprojection=ak.flatten(on_metprojection),
+                                         weight=on_tp_weight)
+            
+            # off_MET = - (off_pt1 + off_pt2 + off_pt3); off_pt3 is vector sum of everything else
+            # on_modified_off_MET = - (off_pt1 + off_pt2 + off_pt3) - on_pt2 + off_pt2
+#             if self.on_off_tagprobe._on_off_ordering == 0:
+#                 off_jets_2 = events[self.on_jet_name + "_without_tagprobe"][:, :2]
+            if self.on_off_tagprobe._on_off_ordering == 1:
+                off_jets_2 = on_jets_probe.nearest(events[self.off_jet_name + "_without_tagprobe"][:, :2])
+            else:# self.on_off_tagprobe._on_off_ordering == 3:
+                off_jets_2 = on_jets_probe.nearest(events[self.off_jet_name + "_without_tagprobe"])
+            on_modified_off_MET = events[self.off_MET_name] - on_jets_probe + off_jets_2
+            
+            on_metprojection = ((on_modified_off_MET.dot(on_jets_tag))/on_jets_tag.pt) / on_jets_tagprobe_sum_pt  
+            out["tp_metprojection"].fill(dataset=dataset, jet_type=self.on_jet_label+"_on-mod-off",
+                                         jet_pt=ak.flatten(on_jets_tag.pt),
+                                         jet_eta=ak.flatten(on_jets_tag.eta),
+                                         #jet_phi=ak.flatten(on_jets_tag.phi),
+                                         tp_metprojection=ak.flatten(on_metprojection),
+                                         weight=on_tp_weight)    
+            out["tp_metprojection"].fill(dataset=dataset, jet_type=self.on_jet_label+"_on-mod-off_ave",
                                          jet_pt=ak.flatten(on_jets_tagprobe_ave_pt),
                                          jet_eta=ak.flatten(on_jets_tag.eta),
                                          #jet_phi=ak.flatten(on_jets_tag.phi),
