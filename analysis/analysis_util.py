@@ -21,6 +21,29 @@ from scipy import optimize
 from scipy import stats
 
 #########################
+###### Luminosity #######
+#########################
+
+# goldenjson: https://twiki.cern.ch/twiki/bin/view/CMS/CertificationOfCollisions22
+# lumidata: https://twiki.cern.ch/twiki/bin/view/CMS/LumiRecommendationsRun3
+# brilcalc lumi --normtag /cvmfs/cms-bril.cern.ch/cms-lumi-pog/Normtags/normtag_BRIL.json -u /fb -i ../lumimask/Cert_Collisions2022_355100_362760_Golden.json -b "STABLE BEAMS" --byls --output-style csv > lumi2022.csv
+def compute_integrated_luminosity(out, lumi_csv_path, dataset=None, lumi=None):
+    from coffea.lumi_tools import LumiData
+    dataset = out["configurations"]["IO"]["dataset_names"] if dataset is None else dataset
+    if eval(out["configurations"]["Processor"]["is_data"]): # data
+        lumidata = LumiData(lumi_csv_path)
+        out["processed_lumi"][dataset]["lumi_list"].unique() # apply unique
+        lumi = lumidata.get_lumi(out["processed_lumi"][dataset]["lumi_list"])
+        out["processed_lumi"][dataset]["lumi"] = lumi
+    else: # mc
+        # use the same lumi from data otherwise will sum all
+        if lumi is None:
+            lumidata = LumiData(lumi_csv_path)
+            lumi = np.sum(lumidata._lumidata[:, 2])
+        out["processed_lumi"] = {dataset:{"lumi_list": None, "lumi": lumi}}
+    return lumi
+
+#########################
 ### Histogram helpers ###
 #########################
 
