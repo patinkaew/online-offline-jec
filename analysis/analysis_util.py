@@ -193,6 +193,36 @@ def integrate_histogram(h, axis, lower=0, upper=None, mirror=False): # experimen
             return rslt
         else:
             return rslt + h[{axis: slice(-upper * 1j, -lower*1j,sum)}]
+        
+def fold_histogram(h, axis): # this is used to compute absolute, e.g. absolute eta
+    axes = list(h.axes)
+    iaxis = axis if isinstance(axis, int) else h._name_to_index(axis)
+    axis = h.axes[iaxis].name
+    axes.pop(iaxis)
+    
+    num_bins = len(h.axes[iaxis].widths)
+    edges = h.axes[iaxis]
+    assert all(-h.axes[iaxis].edges[::-1] == h.axes[iaxis].edges), \
+        "binning in axis: {} must be mirror-invertible".format(axis)
+    
+    new_edges = np.unique(np.abs(edges))
+    new_axis = h.axes[iaxis].__class__(new_edges, name=h.axes[iaxis].name, label=h.axes[iaxis].label)
+    axes.insert(iaxis, new_axis)
+    new_hist = h.__class__(*axes, storage=h.storage_type())
+    half_num_bins = num_bins // 2
+    
+    if num_bins % 2 == 0: # even
+        for bin_idx in range(half_num_bins):
+            sum_hist = h[{axis:half_num_bins + bin_idx}] + h[{axis:half_num_bins - bin_idx - 1}]
+            new_hist[{axis:bin_idx}] = sum_hist.view(flow=True)
+    else: # odd
+        new_hist[{axis:0}] = h[{axis:half_num_bins}]
+        for bin_idx in range(1, half_num_bins):
+            
+            sum_hist = h[{axis:half_num_bins + bin_idx}] + h[{axis:half_num_bins - bin_idx}]
+            new_hist[{axis:bin_idx}] = sum_hist.view(flow=True)
+    
+    return new_hist
 
 # common histogram preprocessing
 # this combine selecting and integrating
@@ -329,6 +359,7 @@ def compute_stats(h, axis, compute_median=True, approx_median=False):
     
     # compute median
     median = None
+    median_error = None
     if compute_median:
         med_bin_idx = np.sum(cmf < total/2, axis=iaxis, keepdims=True)
         if approx_median:
@@ -339,8 +370,8 @@ def compute_stats(h, axis, compute_median=True, approx_median=False):
             med_freq = np.take_along_axis(freqs, med_bin_idx, axis=iaxis)
             med_freq = np.where(med_freq==0, np.nan, med_freq)
             median = edges[med_bin_idx] + (total/2 - med_cmf_before) * widths[med_bin_idx] / med_freq
-    median = median.squeeze()
-    median_error = 1.2533 * mean_error
+        median = median.squeeze()
+        median_error = 1.2533 * mean_error
     
     return {"centers": centers, "freqs": freqs, "mean": ave, \
             "stdev": stdev, "var": var, "mean_error": mean_error, \
