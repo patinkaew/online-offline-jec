@@ -753,8 +753,8 @@ class JetEnergyCorrector(SelectorABC):
                 warnings.warn("No GenJet information needed for JER/JERSF")
                 
         # apply JEC
-        if not isinstance(self.jet_factory, NothingJetsFactory):
-            correction_level_in_use.add("jec")
+#         if not isinstance(self.jet_factory, NothingJetsFactory):
+#             correction_level_in_use.add("jec")
         jets = self.jet_factory.build(jets, lazy_cache=events.caches[0])
         events[self._jet_name] = jets
         
