@@ -161,10 +161,6 @@ class OnlineOfflineProcessor(ProcessorABC):
         self.on_jet_JEC = JetEnergyCorrector(on_jet_weight_filelist, jet_name=on_jet_name,
                                              rho_name=on_rho_name, verbose=verbose)
         
-        # minimum jets pt
-        self.off_jet_min_pt = PhysicsObjectMinPt(off_jet_name, off_jet_min_pt)
-        self.on_jet_min_pt = PhysicsObjectMinPt(on_jet_name, on_jet_min_pt)
-        
         # propagate JEC to MET
         if "tp_metprojection" in hist_to_fill \
             or "tp" in hist_to_fill \
@@ -173,6 +169,10 @@ class OnlineOfflineProcessor(ProcessorABC):
             assert off_MET_name is not None and on_MET_name is not None, "Must specify offline and online MET"
             self.off_met_correction = METCorrector(met_name=off_MET_name, jet_name=off_jet_name)
             self.on_met_correction = METCorrector(met_name=on_MET_name, jet_name=on_jet_name)
+
+        # minimum jets pt
+        self.off_jet_min_pt = PhysicsObjectMinPt(off_jet_name, off_jet_min_pt)
+        self.on_jet_min_pt = PhysicsObjectMinPt(on_jet_name, on_jet_min_pt)
         
         # tag and probe
         self.on_off_tagprobe = OnlineOfflineDijetTagAndProbe(off_jet_name, on_jet_name,
@@ -493,14 +493,14 @@ class OnlineOfflineProcessor(ProcessorABC):
         events = self.off_jet_JEC(events, cutflow)
         events = self.on_jet_JEC(events, cutflow)
         
-        # jets minimum pt
-        events = self.off_jet_min_pt(events, cutflow)
-        events = self.on_jet_min_pt(events, cutflow)
-        
         # propagate JEC to MET
         if "tp_metprojection" in self.hist_to_fill or len([_ for _ in self.hist_to_fill if _.startswith("met")]) > 0:
             events = self.off_met_correction(events, cutflow)
             events = self.on_met_correction(events, cutflow)
+        
+        # jets minimum pt
+        events = self.off_jet_min_pt(events, cutflow)
+        events = self.on_jet_min_pt(events, cutflow)
         
 #         if self.off_jet_JEC.status:
 #             events, off_correction_level_in_use = self.off_jet_JEC(events, cutflow)
