@@ -15,6 +15,8 @@ import string
 import warnings
 from functools import partial
 import inspect
+import sympy
+import re
 
 import itertools
 from scipy import optimize
@@ -433,3 +435,119 @@ def compute_stats_old(h, axis=-1, compute_median=True, compute_mode=False, appro
             "stdev": stdev, "var": var, "mean_error": mean_error, \
             "median": median, "median_error": median_error, \
             "mode": mode}
+
+###################################
+### Function Expression Helpers ###
+###################################
+
+def ROOT_expr_to_sympy(string_expression):
+    return re.sub(r"\[\d+\]", lambda match_obj: "p%s"%match_obj.group()[1:-1], string_expression)
+def sympy_expr_to_ROOT(string_expression):
+    return re.sub(r"[p]\d+", lambda match_obj: "[%s]"%match_obj.group()[1:], string_expression)
+
+def func_to_sympy_expr(func): # only work with return
+    func_str = inspect.getsource(func)
+    out_expr = re.sub(r"\s+", "", func_str[func_str.find("return")+6:]) # len(return) == 6
+    out_expr = re.sub(r"\b(math.|np.|numpy.|torch.|sympy.|mpmath.)\b", "", out_expr) # remove module names
+    return out_expr
+def sympy_expr_to_func(string_expression, module="numpy"):
+    return sympy.sympify(string_expression, module)
+
+def ROOT_expr_to_func(string_expression, module="numpy"):
+    return sympy_expr_to_func(ROOT_expr_to_sympy(x), module)
+def func_to_ROOT_expr(func):
+    return sympy_expr_to_ROOT(func_to_sympy_expr(func))
+
+def replace_number_to_parameter(string_expression, 
+                                input_format="sympy", output_format=None, 
+                                convert_number_type="Float", blacklist_number=[1, -1], 
+                                merge_float_value=False):
+    assert input_format in {"sympy", "python", "ROOT"}, \
+        "Unrecoginized {} input expression format".format(output_format)
+    if input_format in {"python"}: # change to alias
+        input_format = "sympy"
+        
+    output_format = input_format if output_format is None else output_format
+    assert output_format in {"sympy", "python", "ROOT"}, \
+        "Unrecoginized {} output expression format".format(output_format)
+    if output_format in {"python"}: # change to alias
+        output_format = "sympy"
+        
+    if input_format == "ROOT":
+        string_expression = ROOT_expr_to_sympy(string_expression)
+        
+    param_dict = {}
+    def replace_fn(match_object):
+        nonlocal param_dict
+        param_name = "p%s"%(len(param_dict))
+        if match_object.group().startswith("Float"):
+            val = float(re.search(r"\'\d+\.\d+\'", match_object.group()).group()[1:-1])
+            if val in blacklist_number:
+                return match_object.group()
+            if merge_float_value:
+                for key, value in param_dict.items():
+                    if np.isclose(val, value):
+                        return "Symbol('%s')"%key
+                param_dict[param_name] = val # not found
+            else:        
+                param_dict[param_name] = val
+        elif match_object.group().startswith("Integer"):
+            val = int(re.search(r"\(\-?\d+\)", match_object.group()).group()[1:-1])
+            if val in blacklist_number:
+                return match_object.group()
+            param_dict[param_name] = val
+        elif match_object.group().startswith("Rational"):
+            num, den = re.search(r"\((.*?)\)", match_object.group()).group()[1:-1].split(",")
+            val = int(num) / int(den)
+            if val in blacklist_number:
+                return match_object.group()
+            param_dict[param_name] = val
+        else:
+            raise ValueError("Unimplemented: {}".format(match_object.group()))
+        return "Symbol('%s')"%param_name
+    
+    tree_str = sympy.srepr(sympy.sympify(string_expression))
+    tree_str_replaced = re.sub(r"\b({})\b\((.*?)\)".format("|".join(convert_number_type)), replace_fn, tree_str)
+    out_expr = str(sympy.sympify(sympy.sympify(tree_str_replaced)))
+
+    if output_format == "ROOT":
+        out_expr = sympy_expr_to_ROOT(out_expr)
+        param_dict_temp = {}
+        for key, value in param_dict.items():
+            param_dict_temp["[%s]"%(key[1:])] = value
+        param_dict = param_dict_temp
+            
+    return out_expr, param_dict
+
+def shift_parameter_number(string_expression, offset):
+    return re.sub("p\d+", lambda match_object: "p%s"%(int(match_object.group()[1:]) + offset), string_expression)
+
+def re_parameter_number(string_expression, offset=0):
+    counter = offset
+    def replace_fn(match_object):
+        expr = "p%s"%counter
+        counter += 1
+        return expr
+    return re.sub("p\d+", replace_fn, string_expression)
+
+def count_num_parameters(string_expression):
+    count = 0
+    def replace_fn(match_object):
+        count += 1
+        return match_object.group()
+    re.sub("p\d+", replace_fn, string_expression)
+    return count
+    
+def merge_string_expressions(string_expressions, param_dicts=None):
+    if param_dicts is not None:
+        assert len(string_expressions) == len(param_dicts), \
+        "Number of expressions and parameter dictionaries must match, but got {} and {}"\
+        .format(len(string_expressions), len(param_dicts))
+    update_str_expr = re_parameter_number(string_expressions[0])
+    param_count = count_num_parameters()
+    
+    if param_dict is None:
+        for str_expr in string_expressions[1:]:
+            update_str_expr = re_parameter_number()
+    else: # need to merge param_dict
+        update_param_dict = param_dicts[0]
