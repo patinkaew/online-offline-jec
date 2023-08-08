@@ -765,6 +765,28 @@ class JetEnergyCorrector(SelectorABC):
         # here, we will count events with at least one jets instead, more useful for cutflow
         return np.sum(ak.num(events[self._jet_name]) > 0)
 
+# Type-1 MET correction: propagating JEC to MET
+# this expects that JEC is applied before
+class METCorrector(SelectorABC):
+    def __init__(self, met_name, jet_name):
+        super().__init__()
+        self._met_name = met_name
+        self._jet_name = jet_name
+    def __str__(self):
+        return "{}: MET Correction".format(self._met_name)
+    def apply(self, events):
+        jets = events[self._jet_name]
+        if "pt_orig" in jets.fields:
+            met_x = events[self._met_name].pt * np.cos(events[self._met_name].phi)
+            met_x = met_x + ak.sum(events[self._jet_name].pt_orig * np.cos(events[self._met_name].phi), axis=1)
+            met_x = met_x - ak.sum(events[self._jet_name].pt * np.cos(events[self._met_name].phi), axis=1) # JEC applied
+            met_y = events[self._met_name].pt * np.sin(events[self._met_name].phi)
+            met_y = met_y + ak.sum(events[self._jet_name].pt_orig * np.sin(events[self._met_name].phi), axis=1)
+            met_y = met_y - ak.sum(events[self._jet_name].pt * np.sin(events[self._met_name].phi), axis=1) # JEC applied
+            events[self._met_name, "pt"] = np.hypot(met_x, met_y)
+            events[self._met_name, "phi"] = np.arctan2(met_y, met_x)
+        return events
+    
 ### delta R matching ###
 class DeltaRMatching(SelectorABC):
     def __init__(self, max_deltaR, first_physics_object_name, second_physics_object_name, save_original=False):
