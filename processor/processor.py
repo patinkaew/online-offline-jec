@@ -494,9 +494,9 @@ class OnlineOfflineProcessor(ProcessorABC):
         events = self.on_jet_JEC(events, cutflow)
         
         # propagate JEC to MET
-        if "tp_metprojection" in self.hist_to_fill or len([_ for _ in self.hist_to_fill if _.startswith("met")]) > 0:
-            events = self.off_met_correction(events, cutflow)
-            events = self.on_met_correction(events, cutflow)
+#         if "tp_metprojection" in self.hist_to_fill or len([_ for _ in self.hist_to_fill if _.startswith("met")]) > 0:
+#             events = self.off_met_correction(events, cutflow)
+#             events = self.on_met_correction(events, cutflow)
         
         # jets minimum pt
         events = self.off_jet_min_pt(events, cutflow)
