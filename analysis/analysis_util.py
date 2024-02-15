@@ -440,24 +440,51 @@ def compute_stats_old(h, axis=-1, compute_median=True, compute_mode=False, appro
 ### Function Expression Helpers ###
 ###################################
 
+def get_parameter_list(string_expression, sort=False):
+    param_list = list(set(re.findall(r"p\d+", string_expression)))
+    if not sort:
+        return param_list
+    return sorted(param_list, key=lambda x:int(x[1:]))
+
+def get_num_parameters(string_expression):
+    return len(get_parameter_list(string_expression))
+
 def ROOT_expr_to_sympy(string_expression):
-    return re.sub(r"\[\d+\]", lambda match_obj: "p%s"%match_obj.group()[1:-1], string_expression)
+#     def replace_pow(match_obj):
+#         base, exponent = match_obj.group()[4:-1].split(",") # remove pow( and )
+#         return "({})**({})".format(base, exponent)
+#     string_expression = re.sub(r"pow\(.*?\)", replace_pow, string_expression)
+    # change indicator expression
+    #string_expression = re.sub(r"\([A-Za-z0-9]+(>=|<=|==|!=|>|<)[0-9]+\)", 
+    #                           lambda match_obj: "Piecewise((1, {}), (0, True))".format(match_obj.group()[1:-1]),
+    #                           string_expression)
+    return re.sub(r"\[[0-9]+\]", lambda match_obj: "p%s"%match_obj.group()[1:-1], string_expression)
+
 def sympy_expr_to_ROOT(string_expression):
-    return re.sub(r"[p]\d+", lambda match_obj: "[%s]"%match_obj.group()[1:], string_expression)
+#     def replace_pow(match_obj):
+#         base, exponent = match_obj.group()[1:-1].split("**") # remove pow( and )
+#         return "pow({}, {})".format(base, exponent)
+#     string_expression = re.sub(r"\*\*.*?[-+*/]", replace_pow, string_expression)
+    
+    return re.sub(r"p[0-9]+", lambda match_obj: "[%s]"%match_obj.group()[1:], string_expression)
 
 def func_to_sympy_expr(func): # only work with return
     func_str = inspect.getsource(func)
     out_expr = re.sub(r"\s+", "", func_str[func_str.find("return")+6:]) # len(return) == 6
     out_expr = re.sub(r"\b(math.|np.|numpy.|torch.|sympy.|mpmath.)\b", "", out_expr) # remove module names
     return out_expr
-def sympy_expr_to_func(string_expression, module="numpy"):
-    return sympy.sympify(string_expression, module)
+def sympy_expr_to_func(string_expression, modules=["scipy", "numpy"]):
+    params = get_parameter_list(string_expression, sort=True)
+    return sympy.lambdify(["x", *params], string_expression, modules=modules)
 
-def ROOT_expr_to_func(string_expression, module="numpy"):
-    return sympy_expr_to_func(ROOT_expr_to_sympy(x), module)
+def ROOT_expr_to_func(string_expression, module=["scipy", "numpy"]):
+    return sympy_expr_to_func(ROOT_expr_to_sympy(x), modules=modules)
 def func_to_ROOT_expr(func):
     return sympy_expr_to_ROOT(func_to_sympy_expr(func))
 
+# replace numbers appearing in the expression with parameters
+# e.g. 0.25*x+1.4 --> p1*x+p2
+# return expression with numbers replaced by parameters, and dict {parameter:value from original expression}
 def replace_number_to_parameter(string_expression, 
                                 input_format="sympy", output_format=None, 
                                 convert_number_type="Float", blacklist_number=[1, -1], 
@@ -519,9 +546,13 @@ def replace_number_to_parameter(string_expression,
             
     return out_expr, param_dict
 
+# shift parameter number by offset
+# e.g. offset=1: p2*x + p1 -> p3*x + p2
 def shift_parameter_number(string_expression, offset):
     return re.sub("p\d+", lambda match_object: "p%s"%(int(match_object.group()[1:]) + offset), string_expression)
 
+# re-number parameter by appearing order in the expression
+# e.g. p2*x + p1 -> p1*x + p2
 def re_parameter_number(string_expression, offset=0):
     counter = offset
     def replace_fn(match_object):
@@ -529,22 +560,14 @@ def re_parameter_number(string_expression, offset=0):
         counter += 1
         return expr
     return re.sub("p\d+", replace_fn, string_expression)
-
-def count_num_parameters(string_expression):
-    count = 0
-    def replace_fn(match_object):
-        count += 1
-        return match_object.group()
-    re.sub("p\d+", replace_fn, string_expression)
-    return count
     
-def merge_string_expressions(string_expressions, param_dicts=None):
+def merge_string_expressions(string_expressions, param_dicts=None): #what does this do again
     if param_dicts is not None:
         assert len(string_expressions) == len(param_dicts), \
         "Number of expressions and parameter dictionaries must match, but got {} and {}"\
         .format(len(string_expressions), len(param_dicts))
     update_str_expr = re_parameter_number(string_expressions[0])
-    param_count = count_num_parameters()
+    param_count = get_num_parameters(string_expressions[0])
     
     if param_dict is None:
         for str_expr in string_expressions[1:]:
